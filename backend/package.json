@@ -9,7 +9,7 @@
     "start:worker": "nest start notification-worker",
     "start:worker:dev": "nest start notification-worker --watch",
     "lint": "eslint \"{apps,libs,test}/**/*.ts\"",
-    "typecheck": "tsc -b tsconfig.json --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:tenant-isolation": "jest --testPathPattern=tenant-isolation"
@@ -39,6 +39,7 @@
     "@types/express": "4.17.21",
     "@types/jest": "29.5.12",
     "@types/node": "20.14.15",
+    "@types/supertest": "6.0.2",
     "@typescript-eslint/eslint-plugin": "7.18.0",
     "@typescript-eslint/parser": "7.18.0",
     "eslint": "8.57.0",

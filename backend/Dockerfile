@@ -15,10 +15,10 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 EXPOSE 4000
-CMD ["node", "dist/apps/api/main.js"]
+CMD ["node", "dist/apps/api/src/main.js"]
 
 FROM base AS notification-worker
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-CMD ["node", "dist/apps/notification-worker/main.js"]
+CMD ["node", "dist/apps/notification-worker/src/main.js"]

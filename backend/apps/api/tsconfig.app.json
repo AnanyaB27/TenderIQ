@@ -1,7 +1,8 @@
 {
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
-    "outDir": "../../dist/apps/api"
+    "outDir": "../../dist",
+    "rootDir": "../.."
   },
   "include": ["src/**/*", "../../libs/**/*"]
 }
