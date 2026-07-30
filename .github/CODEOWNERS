@@ -1,0 +1,16 @@
+# Default: any change requires review from the core team.
+* @tenderiq/core
+
+# Per-service ownership
+/backend/            @tenderiq/backend
+/ai-engine/           @tenderiq/ai
+/frontend/            @tenderiq/frontend
+/docker/              @tenderiq/platform
+/.github/workflows/   @tenderiq/platform
+/docs/                @tenderiq/core
+
+# Security-sensitive paths require the elevated two-reviewer rule
+# (docs/engineering/ENGINEERING_GUIDE.md §9, §12).
+/backend/libs/common/guards/                                   @tenderiq/security @tenderiq/backend
+/backend/libs/database/repositories/tenant-scoped.repository.ts @tenderiq/security @tenderiq/backend
+/backend/apps/api/src/modules/auth/                             @tenderiq/security @tenderiq/backend

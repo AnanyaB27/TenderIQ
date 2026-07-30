@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Env files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# Docker
+docker/k8s/**/secrets.yaml

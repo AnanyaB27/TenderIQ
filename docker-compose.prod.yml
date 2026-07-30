@@ -1,0 +1,50 @@
+version: "3.9"
+
+# Production-shaped compose file used only for staging smoke-testing built
+# images before they are deployed via docker/k8s (see docs/PROJECT_STRUCTURE.md §4).
+# This file is NOT the production deployment mechanism.
+
+services:
+  backend-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: api
+    image: tenderiq/backend-api:local
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.example
+    ports:
+      - "4000:4000"
+
+  notification-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: notification-worker
+    image: tenderiq/notification-worker:local
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.example
+
+  ai-engine:
+    build:
+      context: ./ai-engine
+      dockerfile: Dockerfile
+    image: tenderiq/ai-engine:local
+    restart: unless-stopped
+    env_file:
+      - ./ai-engine/.env.example
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: tenderiq/frontend:local
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env.example
+    ports:
+      - "3000:3000"

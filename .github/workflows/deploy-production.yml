@@ -1,0 +1,32 @@
+name: deploy-production
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend-api, notification-worker, ai-engine, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (placeholder)
+        run: echo "Build & push tenderiq/${{ matrix.service }}:${GITHUB_REF_NAME} — wired up in a later phase"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment:
+      name: production
+      # Manual approval gate configured on the "production" GitHub environment
+      # per docs/architecture/Architecture.md §12 and
+      # docs/engineering/ENGINEERING_GUIDE.md §9.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply production overlay (placeholder)
+        run: echo "kubectl apply -k docker/k8s/overlays/production — wired up in a later phase"

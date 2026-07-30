@@ -1,0 +1,46 @@
+name: tenant-isolation-ci
+
+# Required check for any PR touching a data-access module. See
+# docs/engineering/ENGINEERING_GUIDE.md §12/§13 and
+# docs/architecture/Architecture.md §13.3.
+
+on:
+  pull_request:
+    paths:
+      - "backend/libs/database/**"
+      - "backend/apps/api/src/modules/**"
+      - "ai-engine/app/db/**"
+
+jobs:
+  tenant-isolation-suite:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: tenderiq
+          POSTGRES_PASSWORD: tenderiq_test
+          POSTGRES_DB: tenderiq_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tenderiq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run tenant-isolation suite
+        working-directory: backend
+        run: npm run test:tenant-isolation

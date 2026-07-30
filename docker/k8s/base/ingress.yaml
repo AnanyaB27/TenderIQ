@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tenderiq-ingress
+  namespace: frontend
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+    - host: tenderiq.in
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-api
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

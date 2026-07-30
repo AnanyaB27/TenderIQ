@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingestion-worker
+  namespace: ai-engine
+spec:
+  schedule: "*/15 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: ingestion-worker
+              image: tenderiq/ai-engine:latest
+              command: ["python", "-m", "app.workers.ingestion_worker"]
+              envFrom:
+                - secretRef:
+                    name: ai-engine-secrets
+          restartPolicy: OnFailure

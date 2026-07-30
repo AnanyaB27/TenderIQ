@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-engine
+  namespace: ai-engine
+spec:
+  # Internal-only — never attached to the Ingress (Architecture.md §13.1).
+  selector:
+    app: ai-engine
+  ports:
+    - port: 80
+      targetPort: 8000
+  type: ClusterIP

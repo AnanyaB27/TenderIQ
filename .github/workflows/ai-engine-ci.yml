@@ -1,0 +1,60 @@
+name: ai-engine-ci
+
+on:
+  pull_request:
+    paths:
+      - "ai-engine/**"
+      - ".github/workflows/ai-engine-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ai-engine/**"
+
+defaults:
+  run:
+    working-directory: ai-engine
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (black)
+        run: black --check .
+
+      - name: Type check (mypy)
+        run: mypy app
+
+      - name: Unit tests
+        run: pytest tests/unit
+
+  evaluation-gate:
+    runs-on: ubuntu-latest
+    needs: lint-type-test
+    # Implements the release gate defined in docs/ai/AI_DESIGN.md §14 —
+    # a prompt/model change must not regress on the fixed evaluation set.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run evaluation suite
+        run: pytest tests/eval
