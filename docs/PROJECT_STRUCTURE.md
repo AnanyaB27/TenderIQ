@@ -6,11 +6,12 @@
 |---|---|
 | Document | PROJECT_STRUCTURE.md |
 | Product | TenderIQ — AI Procurement Intelligence Platform for MSMEs |
-| Version | 1.0 (Baseline) |
+| Version | 1.1 (Baseline + Addendum) |
 | Status | Approved — Authoritative Source of Truth for repository layout |
 | Owner | Chief Software Architect |
 | Last Updated | 2026-07-30 |
 | Change Policy | This is the single folder structure for TenderIQ. Every service's internal layout follows the module/domain boundaries already fixed in Architecture.md §8–9, DATABASE.md §1, and API_SPEC.md — this document does not introduce new boundaries, it lays out where they live on disk. |
+| Changelog | v1.1 — added `docs/adr/` (§5) per ENGINEERING_GUIDE.md §14's Architecture Decision Record requirement. Additive only; no existing folder changed. |
 | Related Documents | [Architecture.md](architecture/Architecture.md) · [DATABASE.md](database/DATABASE.md) · [API_SPEC.md](api/API_SPEC.md) · [AI_DESIGN.md](ai/AI_DESIGN.md) · [ENGINEERING_GUIDE.md](engineering/ENGINEERING_GUIDE.md) |
 
 > This document lists structure only — folders and files with their purpose. No file contents, function signatures, or implementation code are specified here.
@@ -107,7 +108,10 @@ docs/
 ├── database/DATABASE.md         # Relational schema, ER diagrams, conventions
 ├── api/API_SPEC.md              # Public REST contract
 ├── ai/AI_DESIGN.md              # AI Engine pipeline design
-└── engineering/ENGINEERING_GUIDE.md  # Coding standards, review checklists, onboarding (see next task)
+├── engineering/ENGINEERING_GUIDE.md  # Coding standards, review checklists, workflow
+└── adr/                          # Architecture Decision Records (ENGINEERING_GUIDE.md §14) — added v1.1
+    ├── 0000-template.md          # Standard ADR template: context, decision, consequences, status
+    └── NNNN-title.md             # One file per accepted architecture exception/extension, numbered sequentially
 ```
 
 ---
