@@ -6,12 +6,13 @@
 |---|---|
 | Document | DATABASE.md |
 | Product | TenderIQ — AI Procurement Intelligence Platform for MSMEs |
-| Version | 1.0 (Baseline) |
+| Version | 1.1 (Baseline + Addendum) |
 | Status | Approved — Authoritative Source of Truth for schema design |
 | Owner | Chief Software Architect |
 | Last Updated | 2026-07-30 |
 | Primary Store | PostgreSQL 15+ with `pgvector` extension (per [Architecture.md](../architecture/Architecture.md) §8.1) |
 | Change Policy | This is the single database design for TenderIQ. Every service reads/writes through the ownership boundaries defined here (Architecture.md §8.3). No table is to be added, renamed, or restructured outside this document without updating it first. |
+| Changelog | v1.1 — added `tender_document_chunks` and `tender_chunk_embeddings` (§7.7) as an additive, non-breaking addendum, registering the chunk-level RAG storage that [AI_DESIGN.md](../ai/AI_DESIGN.md) §3/§4/§7 depends on. No existing table was altered. |
 | Related Documents | [Architecture.md](../architecture/Architecture.md) · [API_SPEC.md](../api/API_SPEC.md) · [AI_DESIGN.md](../ai/AI_DESIGN.md) · [ENGINEERING_GUIDE.md](../engineering/ENGINEERING_GUIDE.md) |
 
 > This document describes structure only — no SQL/DDL. Column "Type" values name the intended PostgreSQL type so the design is implementable, but table definitions below are specification, not executable code.
@@ -26,7 +27,7 @@ The schema is organized into six domains, each owned by the service named in Arc
 |---|---|---|
 | Identity & Organization | `users`, `user_oauth_identities`, `organizations`, `organization_members`, `organization_invitations`, `msme_profiles`, `msme_certifications` | Backend API |
 | Tender Taxonomy & Ingestion | `tender_sources`, `tender_categories`, `tenders`, `tender_category_links`, `tender_documents`, `tender_field_corrections`, `ingestion_runs`, `ingestion_errors` | Ingestion Service (writes) / AI Engine (extraction writes) |
-| AI & Matching | `tender_embeddings`, `organization_profile_embeddings`, `match_scores`, `eligibility_checklist_items` | AI Engine |
+| AI & Matching | `tender_embeddings`, `organization_profile_embeddings`, `match_scores`, `eligibility_checklist_items`, `tender_document_chunks`, `tender_chunk_embeddings` | AI Engine |
 | Bid Workspace | `pipeline_items`, `checklist_tasks`, `bid_drafts`, `saved_searches` | Backend API |
 | Notifications | `notifications`, `notification_preferences` | Notification Service |
 | Billing & Compliance | `subscription_plans`, `organization_subscriptions`, `invoices`, `usage_counters`, `audit_log`, `dsr_requests` | Backend API |
@@ -472,6 +473,44 @@ Kept as its own table (not a column on `tenders`) so the wide vector column and 
 
 **Constraints**: UNIQUE (`organization_id`, `tender_id`, `criterion_index`). **Indexes**: index on (`organization_id`, `tender_id`).
 
+### 7.7 Addendum — RAG Chunk Storage (v1.1)
+
+Registered alongside [AI_DESIGN.md](../ai/AI_DESIGN.md) v1.0, which specifies chunk-level retrieval (chunking strategy §3, embedding strategy §4, RAG §7) that requires a chunk-granularity store beneath the tender-level `tender_embeddings` table. This is additive — no existing table, column, or constraint changes.
+
+#### `tender_document_chunks`
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | uuid | PK | |
+| `tender_document_id` | uuid | FK → `tender_documents.id`, NOT NULL, ON DELETE CASCADE | |
+| `chunk_index` | integer | NOT NULL | Ordering position within the source document. |
+| `section_path` | varchar(255) | NULL | Hierarchical clause path, e.g. `"3 > 3.2 > (a)"` (AI_DESIGN.md §2, §3). |
+| `content` | text | NOT NULL | |
+| `page_number_start` | integer | NULL | |
+| `page_number_end` | integer | NULL | |
+| `token_count` | integer | NOT NULL | |
+| `content_hash` | varchar(64) | NOT NULL | SHA-256 of normalized chunk text; drives boilerplate deduplication (AI_DESIGN.md §3). |
+| `created_at` | timestamptz | NOT NULL, DEFAULT now | |
+
+**Constraints**: UNIQUE (`tender_document_id`, `chunk_index`). Category B — system-of-record, no `deleted_at`; immutable once its parent document's processing reaches a terminal state (§7.2).
+
+**Indexes**: index on `tender_document_id`; index on `content_hash` (dedup lookups across documents).
+
+#### `tender_chunk_embeddings`
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | uuid | PK | |
+| `chunk_id` | uuid | FK → `tender_document_chunks.id`, NOT NULL, UNIQUE, ON DELETE CASCADE | |
+| `embedding` | vector(1536) | NOT NULL | Same model family/dimension as `tender_embeddings` (AI_DESIGN.md §4). |
+| `model_name` | varchar(100) | NOT NULL | |
+| `model_version` | varchar(50) | NOT NULL | |
+| `generated_at` | timestamptz | NOT NULL, DEFAULT now | |
+
+**Indexes**: `hnsw`/`ivfflat` index on `embedding`, consistent with §10's indexing strategy. Category B, immutable (AI_DESIGN.md §3: chunks and their embeddings are generated once at ingestion).
+
+> Because `content_hash` deduplication (AI_DESIGN.md §3) means multiple `tender_document_chunks` rows across different documents can share identical text, a future revision may split embedding storage from the chunk row keyed by `content_hash` instead of `chunk_id` to avoid redundant embedding computation. Deferred until dedup volume data justifies the extra join — noted here rather than acted on silently.
+
 ---
 
 ### 7.4 Bid Workspace Domain
@@ -745,6 +784,8 @@ Data Subject Request tracking for DPDP Act, 2023 compliance (NFR-11).
 | `organizations` | `match_scores` | 1:N | `organization_id` | CASCADE |
 | `organizations` | `eligibility_checklist_items` | 1:N | `organization_id` | CASCADE |
 | `organizations` | `pipeline_items` | 1:N | `organization_id` | CASCADE |
+| `tender_documents` | `tender_document_chunks` | 1:N | `tender_document_id` | CASCADE |
+| `tender_document_chunks` | `tender_chunk_embeddings` | 1:1 | `chunk_id` | CASCADE |
 | `pipeline_items` | `checklist_tasks` | 1:N | `pipeline_item_id` | CASCADE |
 | `eligibility_checklist_items` | `checklist_tasks` (source) | 1:N | `source_checklist_item_id` | SET NULL |
 | `pipeline_items` | `bid_drafts` | 1:N | `pipeline_item_id` | CASCADE |
@@ -868,10 +909,23 @@ erDiagram
     TENDERS ||--o{ MATCH_SCORES : scored_by
     ORGANIZATIONS ||--o{ ELIGIBILITY_CHECKLIST_ITEMS : evaluated_for
     TENDERS ||--o{ ELIGIBILITY_CHECKLIST_ITEMS : source_of
+    TENDER_DOCUMENTS ||--o{ TENDER_DOCUMENT_CHUNKS : split_into
+    TENDER_DOCUMENT_CHUNKS ||--|| TENDER_CHUNK_EMBEDDINGS : embeds_as
 
     TENDER_EMBEDDINGS {
         uuid id PK
         uuid tender_id FK
+        vector embedding
+    }
+    TENDER_DOCUMENT_CHUNKS {
+        uuid id PK
+        uuid tender_document_id FK
+        integer chunk_index
+        varchar content_hash
+    }
+    TENDER_CHUNK_EMBEDDINGS {
+        uuid id PK
+        uuid chunk_id FK
         vector embedding
     }
     ORGANIZATION_PROFILE_EMBEDDINGS {
