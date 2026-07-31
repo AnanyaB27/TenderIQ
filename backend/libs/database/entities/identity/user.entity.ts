@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 import { UserOauthIdentityEntity } from './user-oauth-identity.entity';
-
+import { OrganizationMemberEntity } from './organization-member.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -33,8 +33,8 @@ export class UserEntity {
   @Column({ type: 'timestamp with time zone', nullable: true })
   lastLoginAt!: Date | null;
 
- // @OneToMany(() => OrganizationMemberEntity, (member) => member.user)
-  //organizationMembers!: OrganizationMemberEntity[];
+  @OneToMany(() => OrganizationMemberEntity, (member) => member.user)
+  organizationMembers!: OrganizationMemberEntity[];
 
   @OneToMany(() => UserOauthIdentityEntity, (oauthIdentity) => oauthIdentity.user)
   oauthIdentities!: UserOauthIdentityEntity[];
