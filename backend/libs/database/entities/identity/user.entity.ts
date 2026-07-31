@@ -6,9 +6,9 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { OrganizationMemberEntity } from './organization-member.entity';
+
 import { UserOauthIdentityEntity } from './user-oauth-identity.entity';
-import { NotificationPreferenceEntity } from '../notifications/notification-preference.entity';
+
 
 @Entity('users')
 export class UserEntity {

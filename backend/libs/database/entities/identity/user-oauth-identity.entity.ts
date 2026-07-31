@@ -32,7 +32,7 @@ export class UserOauthIdentityEntity {
   refreshToken!: string | null;
 
   @Column({ type: 'jsonb', nullable: true, name: 'profile_data' })
-  profileData!: Record<string, any> | null;
+  profileData!: Record<string, unknown> | null;
 
   @ManyToOne(() => UserEntity, (user) => user.oauthIdentities, {
     onDelete: 'CASCADE',

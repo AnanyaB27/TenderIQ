@@ -71,10 +71,10 @@ export class AuthService {
 
       if (!oauthIdentity) {
         oauthIdentity = this.oauthIdentityRepository.create({
-          userId: user.id,
+          user,
           provider: 'google',
           providerId,
-          profileData: payload,
+          profileData: payload as unknown as Record<string, unknown>,
         });
         await this.oauthIdentityRepository.save(oauthIdentity);
       }
