@@ -1,8 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { OrganizationEntity } from '../../../../../libs/database/entities/identity/organization.entity';
+import {
+  CreateOrganizationDto,
+  UpdateOrganizationDto,
+} from './dto';
 
 @Injectable()
 export class OrganizationsService {
@@ -12,16 +16,19 @@ export class OrganizationsService {
   ) {}
 
   async create(
-    organizationData: DeepPartial<OrganizationEntity>,
+    dto: CreateOrganizationDto,
   ): Promise<OrganizationEntity> {
-    const organization =
-      this.organizationRepository.create(organizationData);
+    const organization = this.organizationRepository.create(dto);
 
     return this.organizationRepository.save(organization);
   }
 
   async findAll(): Promise<OrganizationEntity[]> {
-    return this.organizationRepository.find();
+    return this.organizationRepository.find({
+      order: {
+        createdAt: 'DESC',
+      },
+    });
   }
 
   async findOne(id: string): Promise<OrganizationEntity> {
@@ -40,16 +47,13 @@ export class OrganizationsService {
 
   async update(
     id: string,
-    organizationData: DeepPartial<OrganizationEntity>,
+    dto: UpdateOrganizationDto,
   ): Promise<OrganizationEntity> {
     const organization = await this.findOne(id);
 
-    const updatedOrganization = this.organizationRepository.merge(
-      organization,
-      organizationData,
-    );
+    this.organizationRepository.merge(organization, dto);
 
-    return this.organizationRepository.save(updatedOrganization);
+    return this.organizationRepository.save(organization);
   }
 
   async remove(
@@ -61,7 +65,7 @@ export class OrganizationsService {
 
     return {
       success: true,
-      message: `Organization '${id}' deleted successfully.`,
+      message: 'Organization deleted successfully.',
     };
   }
 }

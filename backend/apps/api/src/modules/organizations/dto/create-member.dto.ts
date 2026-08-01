@@ -2,52 +2,50 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
-  IsString,
   IsUUID,
-  MaxLength,
-  MinLength,
 } from 'class-validator';
 
+import { OrganizationRole } from '@app/database/entities/identity/organization-member.entity';
 export class CreateMemberDto {
   @ApiProperty({
-    description: 'User ID of the organization member',
+    description: 'Organization ID',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim() : value,
   )
   @IsUUID()
-  @IsNotEmpty({
-    message: 'User ID is required.',
-  })
-  userId!: string;
+  @IsNotEmpty()
+  organizationId!: string;
 
   @ApiProperty({
-    description: 'Role assigned to the organization member',
-    example: 'ADMIN',
-    minLength: 2,
-    maxLength: 100,
+    description: 'User ID',
+    example: '550e8400-e29b-41d4-a716-446655440001',
   })
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim() : value,
   )
-  @IsString()
-  @IsNotEmpty({
-    message: 'Role is required.',
+  @IsUUID()
+  @IsNotEmpty()
+  userId!: string;
+
+  @ApiProperty({
+    description: 'Role of the organization member',
+    enum: OrganizationRole,
+    example: OrganizationRole.MEMBER,
   })
-  @MinLength(2)
-  @MaxLength(100)
-  role!: string;
+  @IsEnum(OrganizationRole)
+  @IsNotEmpty()
+  role!: OrganizationRole;
 
   @ApiPropertyOptional({
-    description: 'Whether this member is the primary organization contact',
-    example: false,
-    default: false,
+    description: 'Whether the member is active',
+    default: true,
   })
   @IsOptional()
-  @Transform(({ value }) => Boolean(value))
   @IsBoolean()
-  isPrimary?: boolean;
+  isActive?: boolean;
 }

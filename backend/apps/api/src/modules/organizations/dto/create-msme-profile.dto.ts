@@ -1,121 +1,138 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
-  IsDateString,
+  IsBoolean,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
-  Min,
-  MinLength,
 } from 'class-validator';
 
 export class CreateMsmeProfileDto {
   @ApiProperty({
-    description: 'Registered MSME enterprise name',
-    example: 'ABC Engineering Works',
-    minLength: 2,
-    maxLength: 255,
+    description: 'Organization ID',
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim() : value,
   )
-  @IsString()
-  @IsNotEmpty({
-    message: 'Enterprise name is required.',
-  })
-  @MinLength(2)
-  @MaxLength(255)
-  enterpriseName!: string;
+  @IsUUID()
+  @IsNotEmpty()
+  organizationId!: string;
 
-  @ApiProperty({
-    description: 'Udyam Registration Number',
-    example: 'UDYAM-KR-03-0001234',
-    maxLength: 50,
-  })
-  @Transform(({ value }) =>
-    typeof value === 'string'
-      ? value.trim().toUpperCase()
-      : value,
-  )
-  @IsString()
-  @IsNotEmpty({
-    message: 'Udyam registration number is required.',
-  })
-  @MaxLength(50)
-  udyamRegistrationNumber!: string;
-
-  @ApiProperty({
-    description: 'Enterprise classification',
-    example: 'Micro',
-    maxLength: 50,
-  })
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
-  @IsString()
-  @IsNotEmpty({
-    message: 'Enterprise type is required.',
-  })
-  @MaxLength(50)
-  enterpriseType!: string;
-
-  @ApiPropertyOptional({
-    description: 'Primary business activity',
-    example: 'Manufacturing',
-    maxLength: 100,
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim() : value,
   )
   @IsString()
   @MaxLength(100)
-  majorActivity?: string;
+  businessCategory?: string;
 
-  @ApiPropertyOptional({
-    description: 'Social category',
-    example: 'General',
-    maxLength: 50,
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim() : value,
   )
   @IsString()
+  @MaxLength(100)
+  industry?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  )
+  @IsString()
+  @MaxLength(15)
+  gstin?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  )
+  @IsString()
+  @MaxLength(10)
+  pan?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  )
+  @IsString()
   @MaxLength(50)
-  socialCategory?: string;
+  udyamNumber?: string;
 
-  @ApiPropertyOptional({
-    description: 'Date of incorporation',
-    example: '2023-04-15',
-  })
+  @ApiPropertyOptional()
   @IsOptional()
-  @IsDateString({}, {
-    message: 'Date of incorporation must be a valid ISO 8601 date.',
-  })
-  dateOfIncorporation?: string;
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  address?: string;
 
-  @ApiPropertyOptional({
-    description: 'Investment in plant and machinery',
-    example: 2500000,
-    minimum: 0,
-  })
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MaxLength(100)
+  city?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MaxLength(100)
+  state?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MaxLength(100)
+  country?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MaxLength(20)
+  postalCode?: string;
+
+  @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(0)
-  investmentInPlant?: number;
+  employeeCount?: number;
 
-  @ApiPropertyOptional({
-    description: 'Annual turnover',
-    example: 12000000,
-    minimum: 0,
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(0)
   annualTurnover?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  yearEstablished?: number;
+
+  @ApiPropertyOptional({
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isVerified?: boolean;
 }

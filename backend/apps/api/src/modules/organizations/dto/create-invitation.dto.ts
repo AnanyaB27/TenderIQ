@@ -1,59 +1,97 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsEmail,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
-  IsString,
-  MaxLength,
-  MinLength,
+  IsUUID,
 } from 'class-validator';
+
+import {
+  OrganizationInvitationRole,
+  OrganizationInvitationStatus,
+} from '@app/database/entities/identity/organization-invitation.entity';
 
 export class CreateInvitationDto {
   @ApiProperty({
-    description: 'Email address of the invited user',
-    example: 'john.doe@example.com',
+    description: 'Organization ID',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsUUID()
+  @IsNotEmpty()
+  organizationId!: string;
+
+  @ApiProperty({
+    description: 'Invitee email',
+    example: 'john@example.com',
   })
   @Transform(({ value }) =>
     typeof value === 'string'
       ? value.trim().toLowerCase()
       : value,
   )
-  @IsEmail({}, {
-    message: 'A valid email address is required.',
-  })
-  @IsNotEmpty({
-    message: 'Email is required.',
-  })
+  @IsEmail()
+  @IsNotEmpty()
   email!: string;
 
   @ApiProperty({
-    description: 'Role to assign to the invited user',
-    example: 'MEMBER',
-    minLength: 2,
-    maxLength: 100,
+    enum: OrganizationInvitationRole,
+    example: OrganizationInvitationRole.MEMBER,
+  })
+  @IsEnum(OrganizationInvitationRole)
+  role!: OrganizationInvitationRole;
+
+  @ApiProperty({
+    description: 'Invitation token',
+    example: '8d0d0b70b1d14d8cae67d8fbc7a9f123',
   })
   @Transform(({ value }) =>
-    typeof value === 'string'
-      ? value.trim()
-      : value,
+    typeof value === 'string' ? value.trim() : value,
   )
-  @IsString()
-  @IsNotEmpty({
-    message: 'Role is required.',
-  })
-  @MinLength(2)
-  @MaxLength(100)
-  role!: string;
+  @IsNotEmpty()
+  token!: string;
 
   @ApiPropertyOptional({
-    description: 'Invitation expiration date (ISO 8601 format)',
-    example: '2026-12-31T23:59:59.000Z',
+    enum: OrganizationInvitationStatus,
+    default: OrganizationInvitationStatus.PENDING,
   })
   @IsOptional()
-  @IsDateString({}, {
-    message: 'Expiration date must be a valid ISO 8601 date string.',
+  @IsEnum(OrganizationInvitationStatus)
+  status?: OrganizationInvitationStatus;
+
+  @ApiPropertyOptional({
+    description: 'User who sent the invitation',
+    example: '550e8400-e29b-41d4-a716-446655440001',
   })
-  expiresAt?: string;
+  @IsOptional()
+  @IsUUID()
+  invitedByUserId?: string;
+
+  @ApiProperty({
+    description: 'Invitation expiry date',
+    example: '2026-12-31T23:59:59Z',
+  })
+  @IsDateString()
+  expiresAt!: string;
+
+  @ApiPropertyOptional({
+    description: 'Invitation accepted date',
+    example: '2026-08-01T10:30:00Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  acceptedAt?: string;
+
+  @ApiPropertyOptional({
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
