@@ -12,7 +12,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:tenant-isolation": "jest --testPathPattern=tenant-isolation"
+    "test:tenant-isolation": "jest --testPathPattern=tenant-isolation",
+
+    "typeorm": "ts-node ./node_modules/typeorm/cli.js -d libs/database/data-source.ts",
+    "migration:generate": "npm run typeorm -- migration:generate",
+    "migration:create": "npm run typeorm -- migration:create",
+    "migration:run": "npm run typeorm -- migration:run",
+    "migration:revert": "npm run typeorm -- migration:revert",
+    "migration:show": "npm run typeorm -- migration:show"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
@@ -59,6 +66,7 @@
     "ts-jest": "29.2.4",
     "ts-node": "10.9.2",
     "tsconfig-paths": "4.2.0",
+    "typeorm-ts-node-commonjs": "^0.3.20",
     "typescript": "5.5.4"
   }
 }
