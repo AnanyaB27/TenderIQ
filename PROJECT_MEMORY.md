@@ -2,7 +2,9 @@
 
 *A living development tracker. Unlike the six authoritative documents in `docs/` (which define what TenderIQ **is**) and `CONTEXT.md` (a static external-AI-tool summary), this file tracks what has actually been **done**, what's next, and what's currently broken. It must be updated immediately after every completed module — not batched, not deferred.*
 
-**Last Updated**: 2026-07-30
+**Last Updated**: 2026-08-03
+
+> **Note on this update**: Between the last update of this file and now, the GitHub repository received substantial real implementation work (Auth module, Organizations CRUD, Tenders CRUD, full entity column definitions for most domains) outside of what this file had recorded. Per instruction, the repository was treated as the source of truth and this file has been reconciled to match verified current reality rather than prior assumptions. If anything below still looks stale, trust the repository over this document and update it.
 
 ---
 
@@ -10,105 +12,92 @@
 
 | Module | Type | Status | Date |
 |---|---|---|---|
-| Architecture.md | Doc | ✅ Done (v1.0) | 2026-07-30 |
-| DATABASE.md | Doc | ✅ Done (v1.1 — includes RAG chunk-storage addendum) | 2026-07-30 |
-| API_SPEC.md | Doc | ✅ Done (v1.0) | 2026-07-30 |
-| AI_DESIGN.md | Doc | ✅ Done (v1.0) | 2026-07-30 |
-| PROJECT_STRUCTURE.md | Doc | ✅ Done (v1.1 — includes `docs/adr/`) | 2026-07-30 |
-| ENGINEERING_GUIDE.md | Doc | ✅ Done (v1.0) | 2026-07-30 |
-| CONTEXT.md | Doc | ✅ Done — condensed summary for external AI tools | 2026-07-30 |
-| Repository skeleton — `frontend/` (Next.js) | Scaffold | ✅ Structure only, no business logic. Build verified (`next build` succeeds, all 22 routes). | 2026-07-30 |
-| Repository skeleton — `backend/` (NestJS monorepo) | Scaffold | ✅ Structure only, no business logic. Build verified (`npm run build`, typecheck, lint, e2e `/healthz` all pass). | 2026-07-30 |
-| Repository skeleton — `ai-engine/` (FastAPI) | Scaffold | ✅ Structure only, no AI logic. Verified (`pytest`, `ruff`, `black`, `mypy --strict` all pass). | 2026-07-30 |
-| Docker / Compose / GitHub Actions / Kubernetes manifests | Infra | ✅ Done | 2026-07-30 |
+| Architecture.md, DATABASE.md, API_SPEC.md, AI_DESIGN.md, PROJECT_STRUCTURE.md, ENGINEERING_GUIDE.md, CONTEXT.md | Docs | ✅ Done | 2026-07-30 |
+| Repository skeleton — all 3 services + Docker/Compose/CI/K8s | Scaffold | ✅ Done | 2026-07-30 |
+| **`DatabaseModule` wired into `AppModule`** | Bugfix | ✅ Fixed 2026-08-03 | Was never imported — every `@InjectRepository` across the whole app failed DI resolution at runtime despite `npm run build` passing (build only type-checks; it can't catch DI wiring gaps). Confirmed via boot test before/after. |
+| **Auth module** (register/login/Google OAuth/JWT strategies) | Feature | ✅ Real implementation (pre-existing, verified working) | — |
+| **Organizations module**: Organizations, Members, Invitations, MSME Profile CRUD | Feature | ✅ Real implementation (pre-existing) | — |
+| **Organizations module**: Certifications CRUD | Feature | ✅ Completed 2026-08-03 | Found as an incomplete stub (empty controller/service, entity had only an `id` column, not registered in the module). Added real entity columns, DTOs, service, controller; registered in `organizations.module.ts`. |
+| **Tenders module**: Tender, Category CRUD | Feature | ✅ Real implementation (pre-existing) | — |
+| **Tenders module**: Documents, Sources, Category Links, Field Corrections CRUD | Feature | ✅ Completed 2026-08-03 | `TenderDocument` DTOs pre-existed but weren't wired to a service/controller; `TenderSource`/`CategoryLink`/`FieldCorrection` built from scratch against existing entity columns. |
+| **Notifications module**: Notifications, Preferences CRUD | Feature | ✅ Completed 2026-08-03 | Was fully stubbed; built out completely. |
+| **Pipeline module**: Pipeline Items, Checklist Tasks, Bid Drafts CRUD | Feature | ✅ Completed 2026-08-03 | Was fully stubbed; built out completely. |
+| **Saved Searches CRUD** | Feature | ✅ Completed 2026-08-03 | Was fully stubbed; built out completely. |
+| **Billing module**: Subscription Plans, Subscriptions, Invoices, Usage Counters CRUD | Feature | ✅ Completed 2026-08-03 | Was fully stubbed (and missing services for Invoices/Usage entirely); built out completely, including a new Plans controller/service that didn't exist before. |
+| **Admin module**: DSR Requests CRUD | Feature | ✅ Completed 2026-08-03 | Was a stub; built out completely. |
 
-**Nothing beyond scaffolding has been implemented.** No real business logic, no real AI logic, no live database migration, no live LLM/embedding integration.
+**Every item above was verified, not just written**: `npm run build` (typecheck) passed after each one, and a real boot test (`node dist/apps/api/src/main.js`) confirmed zero DI-resolution errors for each module in turn (only expected Postgres-connection retries, since no local DB is running in this environment).
+
+### Entities intentionally left without public CRUD (documented decisions, not oversights)
+
+| Entity/Group | Reasoning |
+|---|---|
+| `IngestionRunEntity`, `IngestionErrorEntity` | Explicitly instructed as internal-ingestion-only; these are written by the (not-yet-built) ingestion worker process, never by a public POST. |
+| `AuditLogEntity` | Has no `updatedAt` column at all (unlike every other entity) — a deliberate signal it's append-only. Matches Architecture.md's audit-ledger design. Left as the existing internal-only `AuditModule` (no public controller), not given CRUD. |
+| AI-domain entities (`TenderEmbedding`, `OrganizationProfileEmbedding`, `TenderDocumentChunk`, `TenderChunkEmbedding`, `MatchScore`, `EligibilityChecklistItem`) | Architecture.md's explicit ownership boundary: the AI Engine is the sole writer of these; the Backend API is read-only. Not user-CRUDable by design, regardless of column completeness. |
+| AI module (`ai.controller.ts`, gateway/credit-guard services), Reports module, and Admin's `ingestion-health`/`ai-metrics`/`organizations-admin`/`platform-metrics`/`webhooks` controllers | Still stubs — but these are specialized aggregation/proxy/webhook endpoints, not single-entity CRUD, so they don't fit the "create/findAll/findOne/update/remove" pattern this pass was scoped to. Left untouched rather than forced into a CRUD shape that doesn't match their purpose. |
 
 ---
 
 ## 2. Pending Modules
 
-Per the development order in `docs/PROJECT_STRUCTURE.md` §10:
-
-| Phase | Module | Status |
-|---|---|---|
-| 4 | Auth & Company (Organizations, members, MSME profile, certifications) | ⏭️ **Next up** |
-| 5 | Ingestion + parsing/chunking/embedding foundation | Pending |
-| 6 | Extraction, Compliance & Matching (real AI summaries/eligibility/match scores) | Pending |
-| 7 | Bid Pipeline & Checklist (real stage-transition logic) | Pending |
-| 8 | RAG, Chatbot, Draft Generation, Risk Detection | Pending |
-| 9 | Alerts & Notifications (real dispatch) | Pending |
-| 10 | Reports | Pending |
-| 11 | Billing (real Razorpay integration) | Pending |
-| 12 | Admin | Pending |
-| 13 | Frontend build-out | Pending (continuous, tracks backend phases) |
-| 14 | Observability (OpenTelemetry/Prometheus/Grafana/Loki wired for real) | Pending |
-| 15 | Security & Tenant-Isolation Hardening | Pending |
-| 16 | Deployment (staging → production) | Pending |
+| Module | Status |
+|---|---|
+| AI Engine (`ai-engine/` FastAPI service) — real extraction/embedding/matching/RAG/chatbot logic | Pending — still skeleton-only (routes return `not_implemented`) |
+| Backend `ai/` module — real proxying to the AI Engine + credit metering | Pending — stub |
+| Backend `reports/` module — dashboard/funnel/win-loss aggregation queries | Pending — stub |
+| Backend `admin/` — ingestion health, AI metrics, org support tools, platform metrics, Razorpay webhook | Pending — stub (see reasoning above; not simple CRUD) |
+| `libs/common` guards (`JwtAuthGuard`, `OrganizationMembershipGuard`, `RolesGuard`) | **Still no-op placeholders** — every guard's `canActivate()` unconditionally returns `true`. Every endpoint built so far (including everything completed today) is **unauthenticated and unauthorized in practice**. Not safe to expose publicly as-is. |
+| Real baseline TypeORM migration | Still a placeholder (`1730000000000-baseline-schema.ts` has empty `up()`/`down()`) — no environment has ever actually been migrated against these entities. |
+| `docs/database/DATABASE.md` reconciliation | The actual entities (column names, enums, relations) have diverged substantially from what DATABASE.md v1.1 specifies (e.g., `TenderEntity` has different fields entirely). This file was not updated to match — flagged here rather than silently left inconsistent. Worth a dedicated pass. |
+| Frontend / ai-engine build-out | Unchanged since 2026-07-30 — still skeleton-only. |
+| Observability, security hardening, deployment | Unchanged — still pending per the original phase plan. |
 
 ---
 
 ## 3. Folder Structure (current, condensed)
 
-Full detail and file-by-file purpose: `docs/PROJECT_STRUCTURE.md`.
-
-```
-TenderIQ/
-├── docs/            # 6 authoritative docs + docs/adr/
-├── .github/         # CI workflows, CODEOWNERS, PR template
-├── docker/          # nginx.conf, k8s/ (base + staging/production overlays)
-├── docker-compose.yml, docker-compose.prod.yml
-├── CONTEXT.md, PROJECT_MEMORY.md   # root-level living/summary docs
-├── backend/         # NestJS monorepo: apps/api, apps/notification-worker, libs/{common,database,config}
-├── ai-engine/       # FastAPI: app/{ingestion,parsing,chunking,embeddings,extraction,matching,risk,rag,chatbot,drafting,prompts,guardrails,evaluation,workers,db,api}
-└── frontend/        # Next.js App Router: app/(auth)/, app/(dashboard)/
-```
-
-**Status**: matches `docs/PROJECT_STRUCTURE.md` exactly as of 2026-07-30. Any new top-level folder must update that doc in the same PR — flag here if this ever falls out of sync.
+Unchanged from 2026-07-30 at the top level — see `docs/PROJECT_STRUCTURE.md`. Within `backend/apps/api/src/modules/`, every module folder now contains real DTOs/services/controllers for the entities listed in §1 (previously many were empty stubs).
 
 ---
 
 ## 4. Architecture Summary
 
-Three independently-deployed services: **Frontend** (Next.js, no logic), **Backend API** (NestJS — owns Users/Organizations/Pipelines/Billing/Audit, proxies AI features), **AI Engine** (FastAPI, **internal-only** — owns extraction/embeddings/matching/RAG/chatbot/drafting, also houses the tender ingestion connectors). Multi-tenant via "Organization" with roles `owner`/`bid_manager`/`viewer` + a platform-wide `isPlatformAdmin` flag. Tenant isolation enforced at the data-access layer, CI-checked. Ingestion/AI work is entirely async (Redis + BullMQ). Every AI-derived fact must be traceable to source; Match Score and risk flags are advisory only, never blocking. Full detail: `docs/architecture/Architecture.md`.
+Unchanged — see `docs/architecture/Architecture.md`. Note: the **actual implementation does not yet enforce tenant isolation or authentication** (see guards note in §2) — this is a live gap between the documented architecture (§13.3: tenant isolation enforced at the data-access layer, CI-checked) and current code. Flagging prominently since it's a security-relevant discrepancy, not a cosmetic one.
 
 ---
 
 ## 5. Database Summary
 
-PostgreSQL 15+ with `pgvector` (single online store, no separate vector DB). 33 tables across 6 domains (Identity & Organization, Tender Taxonomy & Ingestion, AI & Matching, Bid Workspace, Notifications, Billing & Compliance). App-generated UUIDv7 PKs. Three soft-delete categories: (A) user-owned `deleted_at`, (B) system-of-record driven by `status` (never user-deleted), (C) append-only ledgers (`audit_log`, `dsr_requests`, never deleted). AI Engine is the sole writer of extracted fields/embeddings/scores/checklists; Backend API only writes user-overlay data. Full detail: `docs/database/DATABASE.md`.
+PostgreSQL + TypeORM, entities living in `backend/libs/database/entities/`, imported via the `@app/database/entities/...` path alias (primary convention; a handful of early files — `organizations.service.ts`, `organizations.controller.ts`, `members.service.ts`, auth files — still use relative imports instead; left as-is per "don't refactor completed modules"). Most entities now have real, complete column definitions — the exceptions are the AI-domain entities (still ID-only stubs by design, per §1) and the ingestion entities (fully columned but intentionally not CRUD-exposed).
 
-**Status**: entities exist in `backend/libs/database/entities/` and `ai-engine/app/db/models/` but are currently **ID-only placeholders** — full column definitions per DATABASE.md are not yet implemented in code. The baseline migration file is a placeholder with empty `up()`/`down()`.
+**Divergence from `docs/database/DATABASE.md`**: real entity schemas differ meaningfully from the documented v1.1 spec (different field names, different enums, no `pgvector` usage evident yet, etc.). Treat the actual entity files as ground truth for now; DATABASE.md needs a reconciliation pass.
 
 ---
 
 ## 6. API Summary
 
-Base path `/v1`, Backend API only (AI Engine never public). Bearer JWT (15 min) + rotating refresh cookie. Uniform envelope (`{ data, meta }` / `{ error: {...} }`). Cursor-based pagination everywhere. Six endpoint groups/Swagger tags: **Auth**, **Company** (orgs/members/profile/certifications/billing/notifications), **Tender** (discovery/alerts/pipeline), **AI** (summary/eligibility/match-score/qa/draft, credit-metered), **Reports**, **Admin**. Full detail: `docs/api/API_SPEC.md`.
+Base path is NOT currently prefixed with `/v1` in the running app (no global prefix configured in `main.ts` as of this check) — differs from API_SPEC.md's documented convention. Controllers use flat resource routes (e.g., `organizations`, `organizations/members`, `tenders/documents`, `subscription-plans`) rather than API_SPEC.md's nested-path design (e.g., `organizations/{id}/members`) — foreign keys like `organizationId` are carried in the request body/DTO instead of the URL path. This is the **actual established convention** in the real, working code (confirmed by inspecting `organizations`/`tenders` before writing anything new) and was followed exactly for all new modules per instruction to use the existing architecture, not API_SPEC.md's original design. API_SPEC.md itself was not updated to match — another documentation-vs-code gap worth a dedicated reconciliation pass.
 
-**Status**: every controller exists and is wired into its module/app, but route handlers are empty (no `@Get`/`@Post` methods implemented yet, except `/healthz`/`/readyz` and the AI Engine's stub internal routes).
+Standard CRUD shape confirmed across every module: `POST /` (create), `GET /` (findAll, ordered by `createdAt DESC` unless a more specific order applies), `GET /:id` (findOne, 404 via `NotFoundException`), `PATCH /:id` (update via `repository.merge` + `save`), `DELETE /:id` (remove, returns `{ success, message }`). Every DTO pair follows `Create*Dto` + `Update*Dto extends PartialType(Create*Dto)`, exported from a per-module `dto/index.ts` barrel.
 
 ---
 
 ## 7. Current Branch
 
-- **`main`** — trunk-based development (no long-lived environment branches; per `ENGINEERING_GUIDE.md` §9, staging/production are deployments of tagged commits, not branches).
-- Working tree clean as of 2026-07-30.
-- No feature branch currently checked out. The next unit of work (Phase 4: Auth & Company) should be branched as `feat/auth-and-company-module` per the `<type>/<slug>` convention.
+- **`main`** — working tree had substantial uncommitted changes as of this session's work (all changes described in §1); not committed by this session since committing wasn't requested. Confirm with the user before committing/pushing.
 
 ---
 
 ## 8. Current Sprint
 
-**Sprint 0 — Foundation** *(complete)*
-Goal: establish the six authoritative documents, scaffold all three services + infra, verify everything compiles.
-Status: ✅ Done, 2026-07-30.
+**Sprint 2 — Entity CRUD completion** *(this session, 2026-08-03)*
+Goal: inspect the real repository, classify every remaining entity as public-CRUD vs. internal-only, and implement every missing CRUD module to completion with build+boot verification after each.
+Status: ✅ Done for all entities identified as CRUD-worthy (see §1). AI Engine, Reports, and specialized Admin endpoints intentionally left for a future sprint (see §2).
 
-**Sprint 1 — Auth & Company** *(not yet started)*
-Goal: implement Phase 4 for real — working registration/login/OAuth, organization creation, membership/invitation flow, MSME profile + certifications CRUD, with the real baseline DB migration behind it.
-Status: ⏭️ Next. No start date set — update this section when work begins.
-
-*(This is a lightweight tracker, not a formal ceremony log. Update the sprint name/goal/status here as work actually starts and finishes — don't let it go stale.)*
+**Sprint 3 — Auth enforcement + real migration** *(not started)*
+Goal: replace the no-op guards with real JWT/role/tenant-membership checks; generate and run the real baseline migration against a live Postgres; reconcile DATABASE.md/API_SPEC.md with actual code.
+Status: ⏭️ Recommended next, given the guards-are-no-op finding is a real exposure if anything here gets deployed as-is.
 
 ---
 
@@ -116,33 +105,32 @@ Status: ⏭️ Next. No start date set — update this section when work begins.
 
 | Issue | Area | Severity | Notes |
 |---|---|---|---|
-| Entities/models are ID-only stubs | backend, ai-engine | Blocker for Phase 4+ | Full DATABASE.md column sets not yet in code. |
-| Baseline migration (`1730000000000-baseline-schema.ts`) has empty `up()`/`down()` | backend | Blocker for any real DB | Must be generated from completed entities before any environment is migrated. |
-| `libs/common` guards/interceptors/filters/pipes are no-op placeholders | backend | Blocker for Phase 4+ | `JwtAuthGuard`, `OrganizationMembershipGuard`, `RolesGuard` all currently return `true` unconditionally — **not safe to deploy as-is**. |
-| `DatabaseModule` not yet imported into `AppModule` | backend | Expected at this stage | Deferred until entities are real, to avoid requiring a live DB just to boot the skeleton. |
-| AI Engine internal routes return `{"status": "not_implemented"}` | ai-engine | Expected at this stage | No LLM/embedding provider calls wired up yet. |
-| `npm audit` flags transitive dev-dependency vulnerabilities (eslint 8.x's glob/minimatch chain) | backend, frontend | Low (dev-only, not shipped) | Real fix requires an eslint v9/v10 flat-config migration — tracked, not urgent. |
-| No environment has ever been deployed | infra | Expected at this stage | `docker/k8s/` manifests are unexercised against a real cluster. |
+| Guards are no-op (`canActivate()` always `true`) | backend | **High — not safe to deploy** | Every endpoint, old and new, is effectively unauthenticated/unauthorized right now. |
+| Baseline migration still a placeholder | backend | Blocker for any real DB | No environment has ever been migrated; `synchronize: false` everywhere, so nothing will auto-create tables either. |
+| DATABASE.md / API_SPEC.md no longer match actual code | docs | Medium | Divergence grew during the real-implementation work done outside this file's tracking; needs a dedicated reconciliation pass, not fixed in this session (out of scope for the CRUD task given). |
+| No global `/v1` prefix in `main.ts` | backend | Low | API_SPEC.md documents one; actual routes are unprefixed. |
+| `npm audit` dev-dependency findings (eslint 8.x chain) | backend, frontend | Low | Unchanged from 2026-07-30; still not urgent. |
+| AI Engine, Reports, most of Admin are still stubs | backend, ai-engine | Expected | See §2. |
 
 ---
 
 ## 10. Next Tasks
 
-1. Branch `feat/auth-and-company-module` off `main`.
-2. Implement real `AuthModule`: argon2id password hashing, JWT strategy (access + refresh), Google OAuth strategy, session/refresh-token registry in Redis.
-3. Fill in full column definitions for the Identity & Organization domain entities (`users`, `organizations`, `organization_members`, `organization_invitations`, `msme_profiles`, `msme_certifications`) per DATABASE.md §7.1.
-4. Generate the real baseline TypeORM migration from those entities; wire `DatabaseModule` into `AppModule`.
-5. Implement `TenantScopedRepository`'s actual `organization_id` predicate injection; replace the no-op guards with real logic.
-6. Implement the Organizations module's real endpoints (create/list/update org, members, invitations, MSME profile, certifications) per API_SPEC.md §7.
-7. Add real unit + e2e tests for everything above, including the mandatory tenant-isolation suite.
-8. **Update this document**: move Auth & Company from §2 to §1, update §7/§8, close out any resolved rows in §9, refresh §10.
+1. Decide with the user whether to commit today's work (Certifications, Tender sub-entities, Notifications, Pipeline, SavedSearches, Billing, DSR Requests, the `DatabaseModule` fix) — nothing was committed automatically.
+2. Implement real tenant/role/JWT enforcement in `libs/common/guards/*` — currently the single highest-severity gap.
+3. Generate the real baseline TypeORM migration from the now-mostly-complete entities; stand up a real Postgres (`docker-compose up postgres`) and verify a live boot + a real CRUD round-trip (this session could only verify DI wiring up to the connection attempt, since no local Postgres was running).
+4. Reconcile `docs/database/DATABASE.md` and `docs/api/API_SPEC.md` against actual current entities/routes, or explicitly amend them to document the real conventions (flat routes, body-carried FKs, `@app/database` alias, etc.) as the new baseline.
+5. Build out the AI Engine, Reports module, and the remaining specialized Admin endpoints.
+6. **Update this document** immediately after any of the above lands.
 
 ---
 
 ## 11. Development Rules
 
 - One architecture, one database design, one folder structure, one coding standard, one API contract, one AI pipeline — **never changed without explicit instruction**; any necessary exception gets an ADR in `docs/adr/` first.
-- Never regenerate previous work — read and build on what exists.
-- Any change that would make a `docs/` file inaccurate updates that file **in the same PR**.
-- **This file is updated immediately after every completed module** — Completed/Pending move together, Known Issues and Next Tasks refreshed, no batching updates for later.
-- Full coding/testing/security/commit/branching rules: `docs/engineering/ENGINEERING_GUIDE.md` — this file does not restate them, only tracks compliance status where relevant (see Known Issues).
+- **The repository is the source of truth when it disagrees with this file, memory, or prior conversation context.** Always inspect actual current code before continuing work.
+- Never regenerate previous work, never rename/move/reorganize files, never refactor a module that's already complete — extend or add alongside it.
+- Follow the *actual* established convention in working code over any documented-but-unimplemented design when the two disagree (e.g., flat routes over nested paths, `@app/database` alias imports, plain `@InjectRepository` — no custom repository base classes, no generic CRUD abstractions, no interceptors/CQRS introduced).
+- Every completed feature is verified with a build (`npm run build`) and, where feasible, a boot test — not just "it compiles."
+- **This file is updated immediately after every completed module.**
+- Full coding/testing/security/commit/branching rules: `docs/engineering/ENGINEERING_GUIDE.md` — note it also is not fully in sync with actual practice (e.g., no custom repository classes are in use, contra its tenant-scoped-repository guidance) and may need reconciliation alongside DATABASE.md/API_SPEC.md.

@@ -1,16 +1,29 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   MaxLength,
   MinLength,
 } from 'class-validator';
 
 export class CreateCertificationDto {
+  @ApiProperty({
+    description: 'Organization ID',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsUUID()
+  @IsNotEmpty()
+  organizationId!: string;
+
   @ApiProperty({
     description: 'Type of certification',
     example: 'ISO 9001',
@@ -105,4 +118,12 @@ export class CreateCertificationDto {
   @IsString()
   @MaxLength(500)
   remarks?: string;
+
+  @ApiPropertyOptional({
+    description: 'Whether the certification is active',
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

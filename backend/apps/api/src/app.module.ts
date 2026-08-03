@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
+import { DatabaseModule } from '@app/database/database.module';
+
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
@@ -24,6 +26,7 @@ import { HealthController } from './modules/health/health.controller';
       load: [configuration],
       validationSchema,
     }),
+    DatabaseModule,
     AuthModule,
     OrganizationsModule,
     BillingModule,

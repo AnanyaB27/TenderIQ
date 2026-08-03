@@ -10,6 +10,7 @@ import {
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { OrganizationInvitationEntity } from './organization-invitation.entity';
 import { MsmeProfileEntity } from './msme-profile.entity';
+import { MsmeCertificationEntity } from './msme-certification.entity';
 
 @Entity('organizations')
 export class OrganizationEntity {
@@ -45,6 +46,12 @@ export class OrganizationEntity {
 
   @OneToOne(() => MsmeProfileEntity, (profile) => profile.organization)
   msmeProfile!: MsmeProfileEntity;
+
+  @OneToMany(
+    () => MsmeCertificationEntity,
+    (certification) => certification.organization,
+  )
+  certifications!: MsmeCertificationEntity[];
 
   @CreateDateColumn({
     type: 'timestamp with time zone',
