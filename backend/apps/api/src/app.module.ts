@@ -7,6 +7,7 @@ import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -28,6 +29,7 @@ import { HealthController } from './modules/health/health.controller';
     }),
     DatabaseModule,
     AuthModule,
+    UsersModule,
     OrganizationsModule,
     BillingModule,
     NotificationsModule,
