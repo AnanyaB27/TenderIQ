@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Briefcase, CheckCircle2, AlertTriangle, TrendingUp, ArrowUpRight, Building2, Shield } from 'lucide-react';
+import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, ArrowUpRight, Building2, Shield } from 'lucide-react';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'feed' | 'pipeline'>('feed');
