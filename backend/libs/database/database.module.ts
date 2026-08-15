@@ -91,7 +91,6 @@ const entities = [
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
         entities,
-        migrations: ['libs/database/migrations/*.ts'],
         synchronize: false,
       }),
     }),
