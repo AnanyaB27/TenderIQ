@@ -5,25 +5,12 @@
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
     "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "ignoreDeprecations": "6.0",
     "incremental": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "paths": {
-      "@app/common": ["libs/common"],
-      "@app/common/*": ["libs/common/*"],
-      "@app/database": ["libs/database"],
-      "@app/database/*": ["libs/database/*"],
-      "@app/config": ["libs/config"],
-      "@app/config/*": ["libs/config/*"]
-    }
+    "skipLibCheck": true
   }
 }
