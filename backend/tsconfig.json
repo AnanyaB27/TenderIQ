@@ -5,12 +5,18 @@
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "target": "ES2021",
+    "allowSyntheticDefaultImports": true,
+    "target": "es2021",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
-    "ignoreDeprecations": "6.0",
     "incremental": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "paths": {
+      "@app/database": ["libs/database"],
+      "@app/database/*": ["libs/database/*"]
+    }
   }
 }

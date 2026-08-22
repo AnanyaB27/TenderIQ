@@ -19,6 +19,8 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { HealthController } from './modules/health/health.controller';
+import { EvaluationController } from './evaluation.controller'; // <-- Added new controller
+import { SeedController } from './seed.controller';
 
 @Module({
   imports: [
@@ -41,6 +43,6 @@ import { HealthController } from './modules/health/health.controller';
     AdminModule,
     AuditModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, EvaluationController, SeedController], // <-- Registered here
 })
 export class AppModule {}

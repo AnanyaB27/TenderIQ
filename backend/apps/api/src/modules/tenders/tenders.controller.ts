@@ -15,7 +15,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { TenderEntity } from '@app/database/entities/tender/tender.entity';
+import { TenderEntity } from '../../../../../libs/database/entities/tender/tender.entity';
 
 import {
   CreateTenderDto,

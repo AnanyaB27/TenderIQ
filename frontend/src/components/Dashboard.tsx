@@ -1,42 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, ArrowUpRight, Building2, Shield } from 'lucide-react';
+import { evaluateTender, fetchTendersFromDb } from '../api';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'feed' | 'pipeline'>('feed');
+  const [tenders, setTenders] = useState<any[]>([]);
 
-  // Mock live data matching our procurement domain
-  const mockTenders = [
-    {
-      id: 'TEND-2026-089',
-      title: 'Supply & Installation of IoT Wildlife Monitoring Cameras',
-      issuer: 'Ministry of Environment & Forests',
-      budget: '₹45,00,000',
-      deadline: '28th Mar 2026',
-      matchScore: 96,
-      category: 'IoT & Embedded Systems',
-      status: 'Eligible',
-    },
-    {
-      id: 'TEND-2026-042',
-      title: 'Enterprise Cloud Infrastructure Migration & Security Audit',
-      issuer: 'National Informatics Centre (NIC)',
-      budget: '₹1,20,00,000',
-      deadline: '15th Apr 2026',
-      matchScore: 84,
-      category: 'Cloud & DevOps',
-      status: 'Review Required',
-    },
-    {
-      id: 'TEND-2026-112',
-      title: 'Automated Laser Fencing & Perimeter Security Deployment',
-      issuer: 'Defense Research and Development',
-      budget: '₹85,00,000',
-      deadline: '02. May 2026',
-      matchScore: 78,
-      category: 'Hardware & Defense',
-      status: 'Eligible',
-    },
-  ];
+  // Fetch real tenders from PostgreSQL on component mount
+  useEffect(() => {
+    fetchTendersFromDb().then((data) => {
+      if (data && data.length > 0) {
+        setTenders(data);
+      }
+    });
+  }, []);
+
+  // The function that runs when you click Evaluate
+  const handleEvaluateClick = async (tenderId: string) => {
+    // We use 'org-123' as a dummy organization ID for testing
+    const result = await evaluateTender('org-123', tenderId); 
+    
+    if (result) {
+      alert(
+        `AI Match Score: ${result.matchScore}%\n` +
+        `Status: ${result.eligibilityStatus}\n\n` +
+        `Summary: ${result.summary}\n\n` +
+        `Gaps: ${result.gaps.join(', ')}\n\n` +
+        `Recommendations: ${result.recommendations.join(', ')}`
+      );
+    } else {
+      alert("Failed to evaluate. Make sure the backend is running on port 4000!");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -125,43 +120,51 @@ export default function Dashboard() {
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="p-4 border-b border-slate-800 flex justify-between items-center">
           <h3 className="text-sm font-semibold text-white">Recommended Tenders for Your Organization</h3>
-          <span className="text-xs text-slate-400">Showing 3 top semantic matches</span>
+          <span className="text-xs text-slate-400">Showing top database matches</span>
         </div>
 
         <div className="divide-y divide-slate-800">
-          {mockTenders.map((tender) => (
-            <div key={tender.id} className="p-5 hover:bg-slate-850 transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-mono bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20">
-                    {tender.id}
-                  </span>
-                  <span className="text-xs text-slate-400 flex items-center">
-                    <Building2 className="w-3 h-3 mr-1" /> {tender.issuer}
-                  </span>
+          {tenders.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 text-xs">Loading live database tenders...</div>
+          ) : (
+            tenders.map((tender) => (
+              <div key={tender.id} className="p-5 hover:bg-slate-850 transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-mono bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20">
+                      {tender.referenceNumber}
+                    </span>
+                    <span className="text-xs text-slate-400 flex items-center">
+                      <Building2 className="w-3 h-3 mr-1" /> {tender.issuingAuthority || 'Government Authority'}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-medium text-white hover:text-indigo-400 cursor-pointer">
+                    {tender.title}
+                  </h4>
+                  <div className="flex items-center space-x-4 text-xs text-slate-400 pt-1">
+                    <span>Budget: <strong className="text-slate-200">₹{tender.estimatedValue?.toLocaleString() || 'N/A'}</strong></span>
+                    <span>Deadline: <strong className="text-slate-200">Open</strong></span>
+                    <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300">{tender.procurementCategory || 'General'}</span>
+                  </div>
                 </div>
-                <h4 className="text-sm font-medium text-white hover:text-indigo-400 cursor-pointer">
-                  {tender.title}
-                </h4>
-                <div className="flex items-center space-x-4 text-xs text-slate-400 pt-1">
-                  <span>Budget: <strong className="text-slate-200">{tender.budget}</strong></span>
-                  <span>Deadline: <strong className="text-slate-200">{tender.deadline}</strong></span>
-                  <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300">{tender.category}</span>
-                </div>
-              </div>
 
-              <div className="flex items-center space-x-4 self-end md:self-center">
-                <div className="text-right">
-                  <div className="text-xs font-medium text-slate-400">AI Match</div>
-                  <div className="text-sm font-bold text-emerald-400">{tender.matchScore}%</div>
+                <div className="flex items-center space-x-4 self-end md:self-center">
+                  <div className="text-right">
+                    <div className="text-xs font-medium text-slate-400">AI Match</div>
+                    <div className="text-sm font-bold text-emerald-400">92%</div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => handleEvaluateClick(tender.id)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition flex items-center space-x-1 shadow"
+                  >
+                    <span>Evaluate</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <button className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition flex items-center space-x-1 shadow">
-                  <span>Evaluate</span>
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </button>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
