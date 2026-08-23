@@ -1,3 +1,9 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file before initializing the app or routers
+load_dotenv()
+
 from fastapi import FastAPI
 
 from app.api.v1 import (
@@ -7,6 +13,7 @@ from app.api.v1 import (
     match_router,
     qa_router,
     summary_router,
+    ingestion_router,
 )
 
 # Internal-only service (Architecture.md §8.3) — no public CORS origins,
@@ -23,3 +30,4 @@ app.include_router(summary_router.router)
 app.include_router(qa_router.router)
 app.include_router(match_router.router)
 app.include_router(draft_router.router)
+app.include_router(ingestion_router.router)
