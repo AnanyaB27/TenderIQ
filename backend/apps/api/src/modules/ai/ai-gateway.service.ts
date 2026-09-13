@@ -1,21 +1,42 @@
 import { Injectable, InternalServerErrorException, BadGatewayException } from '@nestjs/common';
 
 export interface MatchEvaluationRequest {
-  tender_id: string;
-  tender_title: string;
-  tender_description: string;
-  org_capabilities: string;
-  dynamic_context?: string | null;
+  document_id: string;
+  org_profile_text?: string;
+}
+
+export interface CitationDto {
+  chunk_id: string;
+  document_id: string;
+  page_start: number;
+  page_end: number;
+  section_heading?: string | null;
+  excerpt: string;
+  validation_status: string;
+  validation_reason?: string | null;
+}
+
+export interface RuleEvaluationDto {
+  rule_id: string;
+  requirement_type: string;
+  status: string;
+  requirement_text: string;
+  organization_value: string;
+  reason: string;
+  is_mandatory: boolean;
+  evidence: CitationDto[];
 }
 
 export interface MatchEvaluationResponse {
-  tenderId: string;
+  documentId: string;
   organizationId: string;
   matchScore: number;
   eligibilityStatus: string;
+  evidenceCoverage: number;
   summary: string;
   gaps: string[];
   recommendations: string[];
+  ruleResults: RuleEvaluationDto[];
 }
 
 @Injectable()
@@ -51,7 +72,8 @@ export class AiGatewayService {
     }
   }
 
-  async extractDocumentText(fileBuffer: Buffer, mimetype: string, originalname: string): Promise<any> {
+  // Keeping return type flexible here as it handles raw extraction data directly from the document parser
+  async extractDocumentText(fileBuffer: Buffer, mimetype: string, originalname: string): Promise<Record<string, unknown>> {
     try {
       const formData = new FormData();
       // Wrap the Node Buffer in a Uint8Array to satisfy TypeScript's BlobPart definition
@@ -67,7 +89,7 @@ export class AiGatewayService {
         throw new BadGatewayException('Failed to extract text from document in AI engine');
       }
 
-      return await response.json();
+      return await response.json() as Record<string, unknown>;
     } catch (error) {
       console.error('AiGatewayService - Document Extraction Error:', error);
       if (error instanceof BadGatewayException) throw error;

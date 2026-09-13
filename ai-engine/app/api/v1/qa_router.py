@@ -1,37 +1,33 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.rag.retriever import Retriever, ChunkResult
+from app.rag.rag_service import RagService, RagAnswerResponse
 
-router = APIRouter(prefix="/internal/retrieval", tags=["retrieval"])
+router = APIRouter(prefix="/internal/rag", tags=["rag"])
 
-class RetrievalRequest(BaseModel):
+class RagRequest(BaseModel):
     query: str
     document_id: str
     top_k: int = 5
-    max_distance: Optional[float] = None
 
-class RetrievalResponse(BaseModel):
-    results: List[ChunkResult]
-
-@router.post("/search", response_model=RetrievalResponse)
-async def search_chunks(request: RetrievalRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/answer", response_model=RagAnswerResponse)
+async def get_rag_answer(request: RagRequest, db: AsyncSession = Depends(get_db)):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
     try:
-        retriever = Retriever(db_session=db)
-        results = await retriever.retrieve(
+        rag_service = RagService(db_session=db)
+        response = await rag_service.answer(
             query=request.query,
             document_id=request.document_id,
-            top_k=request.top_k,
-            max_distance=request.max_distance
+            top_k=request.top_k
         )
-        return RetrievalResponse(results=results)
+        return response
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=502, detail=str(re))
     except Exception as e:
-        print(f"Retrieval Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve relevant chunks.")
+        print(f"RAG Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred during answer generation.")
