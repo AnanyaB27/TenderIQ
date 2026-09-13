@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 class Settings(BaseSettings):
     """Typed, env-driven settings (AI_DESIGN.md, Architecture.md §9.2)."""
 
@@ -17,12 +16,10 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379"
 
-    llm_provider: str = "anthropic"
-    anthropic_api_key: str = ""
-    embedding_provider: str = "voyageai"
-    voyage_api_key: str = ""
+    llm_provider: str = "google"
+    google_api_key: str = ""
+    embedding_provider: str = "google"
 
     internal_service_token: str = "change-me"
-
 
 settings = Settings()

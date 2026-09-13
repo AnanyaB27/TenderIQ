@@ -1,13 +1,27 @@
-import { Controller, Post, Get, Delete, Param, Body, UploadedFile, UseInterceptors, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Body, UploadedFile, UseInterceptors, InternalServerErrorException, BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DataSource } from 'typeorm';
 import { TenderEntity } from '@app/database/entities/tender/tender.entity';
 import { PipelineItemEntity } from '@app/database/entities/pipeline/pipeline-item.entity';
 import { OrganizationEntity } from '@app/database/entities/identity/organization.entity';
+import { TenderDocumentEntity } from '@app/database/entities/tender/tender-document.entity';
+import { AiGatewayService } from './modules/ai/ai-gateway.service';
+
+export interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
 
 @Controller('organizations/:orgId')
 export class EvaluationController {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly aiGatewayService: AiGatewayService
+  ) {}
   
   @Post('tenders/:tenderId/evaluate')
   async evaluateTender(
@@ -15,7 +29,7 @@ export class EvaluationController {
     @Param('tenderId') tenderId: string,
     @Body('dynamicContext') dynamicContext?: string,
   ) {
-    const tender = await this.dataSource.getRepository(TenderEntity).findOneBy({ id: tenderId });
+    const tender = await this.dataSource.getRepository(TenderEntity).findOne({ where: { id: tenderId } });
     
     if (!tender) {
       throw new InternalServerErrorException('Tender not found in database');
@@ -23,57 +37,55 @@ export class EvaluationController {
 
     const orgCapabilities = dynamicContext || "Core technical competencies in artificial intelligence, machine learning, and hardware integration. Proven track record deploying AI-driven wildlife detection cameras using Raspberry Pi and Arduino-powered automated laser fencing systems for perimeter security.";
 
-    try {
-      const response = await fetch(`http://localhost:8000/internal/orgs/${orgId}/match`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tender_id: tenderId,
-          tender_title: tender.title,
-          tender_description: tender.description || tender.procurementCategory || 'General Procurement',
-          org_capabilities: orgCapabilities,
-          dynamic_context: dynamicContext || null,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Python AI Engine failed with status: ${response.status}`);
-      }
-      
-      return await response.json();
-
-    } catch (error) {
-      console.error('Gateway Error calling AI Engine:', error);
-      throw new InternalServerErrorException('Failed to process AI evaluation');
-    }
+    return this.aiGatewayService.evaluateTenderMatch(orgId, {
+      tender_id: tenderId,
+      tender_title: tender.title,
+      tender_description: tender.description || tender.procurementCategory || 'General Procurement',
+      org_capabilities: orgCapabilities,
+      dynamic_context: dynamicContext || null,
+    });
   }
 
   @Post('documents/extract')
   @UseInterceptors(FileInterceptor('file'))
-  async extractDocument(@UploadedFile() file: any) {
+  async extractDocument(@UploadedFile() file: MulterFile) {
     if (!file) {
-      throw new InternalServerErrorException('No file uploaded');
+      throw new BadRequestException('No file uploaded');
     }
 
-    try {
-      const formData = new FormData();
-      const blob = new Blob([file.buffer], { type: file.mimetype });
-      formData.append('file', blob, file.originalname);
-
-      const response = await fetch('http://localhost:8000/internal/documents/extract-text', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to extract text from document in AI engine');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Document Extraction Error:', error);
-      throw new InternalServerErrorException('Document parsing failed');
+    if (file.mimetype !== 'application/pdf') {
+      throw new BadRequestException('Unsupported file type. Only PDF is allowed.');
     }
+    
+    if (file.size > 15 * 1024 * 1024) {
+      throw new PayloadTooLargeException('File size exceeds the 15MB limit.');
+    }
+
+    const aiResponse = await this.aiGatewayService.extractDocumentText(file.buffer, file.mimetype, file.originalname);
+
+    const docRepo = this.dataSource.getRepository(TenderDocumentEntity);
+    const realOrgId = await this.getRealOrgId();
+
+    const newDoc = docRepo.create({
+      organizationId: realOrgId,
+      fileName: file.originalname,
+      fileType: file.mimetype,
+      fileSize: file.size,
+      pageCount: aiResponse.page_count || 0,
+      extractionStatus: aiResponse.status || 'FAILED',
+      extractedText: aiResponse.extracted_text || null
+    } as Partial<TenderDocumentEntity>);
+
+    const savedDoc = await docRepo.save(newDoc);
+
+    return {
+      id: savedDoc.id,
+      filename: savedDoc.fileName,
+      status: savedDoc.extractionStatus,
+      pageCount: savedDoc.pageCount,
+      extractedText: savedDoc.extractedText,
+      pages: aiResponse.pages
+    };
   }
 
   @Get('tenders/sync-live')
@@ -87,7 +99,7 @@ export class EvaluationController {
       const tenderRepo = this.dataSource.getRepository(TenderEntity);
 
       for (const item of liveItems) {
-        let existing = await tenderRepo.findOneBy({ referenceNumber: item.referenceNumber } as any);
+        let existing = await tenderRepo.findOne({ where: { referenceNumber: item.referenceNumber } });
         if (!existing) {
           const newTender = tenderRepo.create({
             referenceNumber: item.referenceNumber,
@@ -96,7 +108,7 @@ export class EvaluationController {
             estimatedValue: item.estimatedValue,
             procurementCategory: item.procurementCategory,
             description: item.description,
-          } as any);
+          } as Partial<TenderEntity>);
           await tenderRepo.save(newTender);
         }
       }
@@ -110,7 +122,7 @@ export class EvaluationController {
 
   private async getRealOrgId(): Promise<string> {
     const orgRepo = this.dataSource.getRepository(OrganizationEntity);
-    const orgs = await orgRepo.find({ take: 1 } as any);
+    const orgs = await orgRepo.find({ take: 1 });
     if (orgs && orgs.length > 0) {
       return orgs[0].id;
     }
@@ -121,29 +133,21 @@ export class EvaluationController {
   async saveToPipeline(
     @Param('orgId') orgId: string,
     @Param('tenderId') tenderId: string,
-    @Body() body: { title: string; authority: string; value: number }
   ) {
     const pipelineRepo = this.dataSource.getRepository(PipelineItemEntity);
     const realOrgId = await this.getRealOrgId();
     
-    // Look up by tenderId and update if exists
-    let existing = await pipelineRepo.findOneBy({ tenderId } as any);
+    let existing = await pipelineRepo.findOne({ where: { tenderId, organizationId: realOrgId } });
     if (existing) {
-      const exAny = existing as any;
-      exAny.tenderTitle = body.title && body.title !== 'Untitled Tender' ? body.title : exAny.tenderTitle;
-      exAny.issuingAuthority = body.authority || exAny.issuingAuthority;
-      exAny.estimatedValue = body.value || exAny.estimatedValue;
-      return await pipelineRepo.save(existing);
+      return existing; 
     }
 
+    // Type-safe partial creation
     const newItem = pipelineRepo.create({
       organizationId: realOrgId,
-      tenderId,
-      tenderTitle: body.title || 'Supply & Installation of IoT Wildlife Monitoring Cameras',
-      issuingAuthority: body.authority || 'Ministry of Environment',
-      estimatedValue: body.value || 4500000,
+      tenderId: tenderId,
       status: 'Drafting',
-    } as any);
+    } as Partial<PipelineItemEntity>);
 
     return await pipelineRepo.save(newItem);
   }
@@ -151,8 +155,24 @@ export class EvaluationController {
   @Get('pipeline')
   async getPipeline(@Param('orgId') orgId: string) {
     const pipelineRepo = this.dataSource.getRepository(PipelineItemEntity);
+    const tenderRepo = this.dataSource.getRepository(TenderEntity);
     const realOrgId = await this.getRealOrgId();
-    return await pipelineRepo.find({ where: { organizationId: realOrgId } as any });
+    
+    const pipelineItems = await pipelineRepo.find({ where: { organizationId: realOrgId } });
+    
+    const enrichedItems = await Promise.all(
+      pipelineItems.map(async (item) => {
+        const tender = await tenderRepo.findOne({ where: { id: item.tenderId } });
+        return {
+          ...item,
+          tenderTitle: tender?.title || 'Untitled Tender',
+          issuingAuthority: tender?.issuingAuthority || 'Government Authority',
+          estimatedValue: tender?.estimatedValue || 0,
+        };
+      })
+    );
+
+    return enrichedItems;
   }
 
   @Delete('pipeline/:id')

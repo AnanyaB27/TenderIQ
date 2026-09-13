@@ -1,115 +1,37 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  Index,
-  Unique,
-} from 'typeorm';
-import { TenderDocumentEntity } from '../tender/tender-document.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ColumnType } from 'typeorm';
 
 @Entity('tender_document_chunks')
-@Unique('UQ_tender_document_chunk_index', ['tenderDocumentId', 'chunkIndex'])
-@Index('IDX_tender_document_chunk_document', ['tenderDocumentId'])
-@Index('IDX_tender_document_chunk_index', ['chunkIndex'])
-@Index('IDX_tender_document_chunk_page', ['pageNumber'])
-@Index('IDX_tender_document_chunk_language', ['language'])
-@Index('IDX_tender_document_chunk_checksum', ['checksum'])
 export class TenderDocumentChunkEntity {
   @PrimaryGeneratedColumn('uuid')
-  id!: string;
+  id: string;
 
-  @Column({
-    type: 'uuid',
-    name: 'tender_document_id',
-  })
-  tenderDocumentId!: string;
+  @Column({ name: 'document_id' })
+  documentId: string;
 
-  @Column({
-    type: 'int',
-    name: 'chunk_index',
-  })
-  chunkIndex!: number;
+  @Column({ name: 'chunk_hash', nullable: true })
+  chunkHash: string;
 
-  @Column({
-    type: 'int',
-    nullable: true,
-    name: 'page_number',
-  })
-  pageNumber!: number | null;
+  @Column({ type: 'int', name: 'sequence_number', default: 1 })
+  sequenceNumber: number;
 
-  @Column({
-    type: 'varchar',
-    length: 255,
-    nullable: true,
-    name: 'section_title',
-  })
-  sectionTitle!: string | null;
+  @Column({ type: 'text' })
+  text: string;
 
-  @Column({
-    type: 'text',
-  })
-  content!: string;
+  @Column({ type: 'int', name: 'page_start', default: 1 })
+  pageStart: number;
 
-  @Column({
-    type: 'int',
-    name: 'token_count',
-  })
-  tokenCount!: number;
+  @Column({ type: 'int', name: 'page_end', default: 1 })
+  pageEnd: number;
 
-  @Column({
-    type: 'int',
-    name: 'character_count',
-  })
-  characterCount!: number;
+  @Column({ name: 'section_heading', nullable: true })
+  sectionHeading: string;
 
-  @Column({
-    type: 'varchar',
-    length: 64,
-  })
-  checksum!: string;
+  @Column({ type: 'int', name: 'char_count', default: 0 })
+  charCount: number;
 
-  @Column({
-    type: 'varchar',
-    length: 10,
-    default: 'en',
-  })
-  language!: string;
+  @Column({ type: 'vector' as unknown as ColumnType, length: 768, nullable: true })
+  embedding: number[] | string | null;
 
-  @Column({
-    type: 'jsonb',
-    nullable: true,
-    name: 'metadata',
-  })
-  metadata!: Record<string, unknown> | null;
-
-  @Column({
-    type: 'boolean',
-    default: true,
-    name: 'is_active',
-  })
-  isActive!: boolean;
-
-  @ManyToOne(() => TenderDocumentEntity, (tenderDocument) => tenderDocument.id, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({
-    name: 'tender_document_id',
-  })
-  tenderDocument!: TenderDocumentEntity;
-
-  @CreateDateColumn({
-    type: 'timestamp with time zone',
-    name: 'created_at',
-  })
-  createdAt!: Date;
-
-  @UpdateDateColumn({
-    type: 'timestamp with time zone',
-    name: 'updated_at',
-  })
-  updatedAt!: Date;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 }

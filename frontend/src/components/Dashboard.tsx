@@ -47,15 +47,34 @@ export default function Dashboard() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
-    const result = await uploadDocument('org-123', file);
-    setIsUploading(false);
+    // Client-side pre-validation
+    if (file.type !== 'application/pdf') {
+      alert("Unsupported file type. Please upload a PDF.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      alert("File is too large. Maximum size is 15MB.");
+      return;
+    }
 
-    if (result && result.extractedText) {
-      setUploadedFile(result.filename);
-      setDynamicContext(result.extractedText);
-    } else {
-      alert("Failed to parse document text. Make sure it's a valid PDF!");
+    setIsUploading(true);
+    try {
+      const result = await uploadDocument('org-123', file);
+      
+      if (result && result.status === 'SUCCESS' && result.extractedText) {
+        setUploadedFile(result.filename);
+        setDynamicContext(result.extractedText);
+      } else if (result && result.status === 'NO_EXTRACTABLE_TEXT') {
+        alert("The PDF was parsed but contains no extractable text. Scanned PDFs (OCR) are not yet supported.");
+        setUploadedFile(null);
+        setDynamicContext(null);
+      } else {
+        alert(result?.message || "Failed to parse document text. Make sure it's a valid, unencrypted PDF.");
+      }
+    } catch (err: any) {
+      alert(err.message || "An error occurred during file upload and extraction.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
