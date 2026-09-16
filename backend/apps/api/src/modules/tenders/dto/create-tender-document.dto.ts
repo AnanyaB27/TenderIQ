@@ -12,7 +12,13 @@ import {
   MaxLength,
 } from 'class-validator';
 
-import { StorageProvider } from '@app/database/entities/tender/tender-document.entity';
+// Defined locally to break the stale import dependency from the Entity
+export enum StorageProvider {
+  LOCAL = 'LOCAL',
+  AWS_S3 = 'AWS_S3',
+  GCP_CS = 'GCP_CS',
+  S3 = 'S3', 
+}
 
 export class CreateTenderDocumentDto {
   @ApiProperty({

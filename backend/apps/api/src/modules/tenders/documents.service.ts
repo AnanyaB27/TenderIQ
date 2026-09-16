@@ -27,7 +27,7 @@ export class DocumentsService {
   async findAll(): Promise<TenderDocumentEntity[]> {
     return this.documentRepository.find({
       order: {
-        createdAt: 'DESC',
+        uploadedAt: 'DESC', // FIXED: 'createdAt' does not exist on this entity
       },
     });
   }

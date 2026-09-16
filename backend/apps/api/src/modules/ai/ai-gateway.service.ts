@@ -52,31 +52,22 @@ export class AiGatewayService {
       });
 
       if (!response.ok) {
-        let errorMsg = response.statusText;
-        try {
-          const errorData = await response.json();
-          errorMsg = errorData.detail || errorMsg;
-        } catch (e) {
-          // Fallback to status text
-        }
-        throw new BadGatewayException(`AI Engine Error: ${errorMsg}`);
+        throw new BadGatewayException(`AI Engine Error: ${response.statusText}`);
       }
 
       return await response.json() as MatchEvaluationResponse;
     } catch (error) {
-      console.error('AiGatewayService - Failed to evaluate match:', error);
-      if (error instanceof BadGatewayException) {
-        throw error;
-      }
+      if (error instanceof BadGatewayException) throw error;
       throw new InternalServerErrorException('Could not connect to the AI Engine for evaluation.');
     }
   }
 
-  // Keeping return type flexible here as it handles raw extraction data directly from the document parser
-  async extractDocumentText(fileBuffer: Buffer, mimetype: string, originalname: string): Promise<Record<string, unknown>> {
+  // ... (existing imports and evaluateTenderMatch code) ...
+
+  async extractDocumentText(documentId: string, fileBuffer: Buffer, mimetype: string, originalname: string): Promise<Record<string, unknown>> {
     try {
       const formData = new FormData();
-      // Wrap the Node Buffer in a Uint8Array to satisfy TypeScript's BlobPart definition
+      formData.append('document_id', documentId); // <-- NEW: Passes ID to AI Engine
       const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimetype });
       formData.append('file', blob, originalname);
 
@@ -86,14 +77,14 @@ export class AiGatewayService {
       });
 
       if (!response.ok) {
-        throw new BadGatewayException('Failed to extract text from document in AI engine');
+        throw new BadGatewayException('Failed to extract and process document in AI engine');
       }
 
       return await response.json() as Record<string, unknown>;
     } catch (error) {
-      console.error('AiGatewayService - Document Extraction Error:', error);
+      console.error('AiGatewayService - Document Pipeline Error:', error);
       if (error instanceof BadGatewayException) throw error;
-      throw new InternalServerErrorException('Document parsing failed');
+      throw new InternalServerErrorException('Document parsing and processing failed');
     }
   }
 }

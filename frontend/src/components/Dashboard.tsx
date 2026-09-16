@@ -1,39 +1,42 @@
+// frontend/src/components/Dashboard.tsx
+
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, ArrowUpRight, Building2, Shield, Loader2, X, AlertCircle, Lightbulb, Upload, FileText, BookmarkPlus, Trash2 } from 'lucide-react';
-import { evaluateTender, fetchTendersFromDb, uploadDocument } from '../api';
+import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, Shield, Loader2, Upload, FileText, Trash2 } from 'lucide-react';
+import { fetchTendersFromDb, uploadDocument } from '../api';
+import { TenderEvaluation } from './TenderEvaluation';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'feed' | 'pipeline'>('feed');
   const [tenders, setTenders] = useState<any[]>([]);
   const [pipelineTenders, setPipelineTenders] = useState<any[]>([]);
-  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
-  const [savingId, setSavingId] = useState<boolean>(false);
   
   // RAG Document state
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
-  const [dynamicContext, setDynamicContext] = useState<string | null>(null);
+  const [documentId, setDocumentId] = useState<string | undefined>(undefined);
   const [isUploading, setIsUploading] = useState<boolean>(false);
 
-  // Modal state
-  const [evaluationResult, setEvaluationResult] = useState<any | null>(null);
+  // Evaluation Navigation State
   const [selectedTenderObj, setSelectedTenderObj] = useState<any | null>(null);
 
+  // In a real app this comes from Context/Redux. Fallback to localStorage.
+  const authOrgId = localStorage.getItem('activeOrganizationId') || 'org-123'; // Note: Keep org-123 fallback temporarily if your auth isn't fully wired yet
+
   useEffect(() => {
-    fetch('http://localhost:4000/organizations/org-123/tenders/sync-live')
+    fetch(`http://localhost:4000/organizations/${authOrgId}/tenders/sync-live`)
       .catch(() => console.log('Live sync warming up...'))
       .finally(() => {
-        fetchTendersFromDb().then((data) => {
+        fetchTendersFromDb(authOrgId).then((data) => {
           if (data && data.length > 0) {
             setTenders(data);
           }
         });
       });
     fetchPipeline();
-  }, []);
+  }, [authOrgId]);
 
   const fetchPipeline = async () => {
     try {
-      const res = await fetch('http://localhost:4000/organizations/org-123/pipeline');
+      const res = await fetch(`http://localhost:4000/organizations/${authOrgId}/pipeline`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setPipelineTenders(data);
@@ -47,7 +50,6 @@ export default function Dashboard() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Client-side pre-validation
     if (file.type !== 'application/pdf') {
       alert("Unsupported file type. Please upload a PDF.");
       return;
@@ -59,17 +61,17 @@ export default function Dashboard() {
 
     setIsUploading(true);
     try {
-      const result = await uploadDocument('org-123', file);
+      const result = await uploadDocument(authOrgId, file);
       
-      if (result && result.status === 'SUCCESS' && result.extractedText) {
+      if (result && result.status === 'READY') {
         setUploadedFile(result.filename);
-        setDynamicContext(result.extractedText);
+        setDocumentId(result.id);
       } else if (result && result.status === 'NO_EXTRACTABLE_TEXT') {
         alert("The PDF was parsed but contains no extractable text. Scanned PDFs (OCR) are not yet supported.");
         setUploadedFile(null);
-        setDynamicContext(null);
+        setDocumentId(undefined);
       } else {
-        alert(result?.message || "Failed to parse document text. Make sure it's a valid, unencrypted PDF.");
+        alert(result?.message || "Failed to process document. It may still be extracting or failed.");
       }
     } catch (err: any) {
       alert(err.message || "An error occurred during file upload and extraction.");
@@ -78,60 +80,13 @@ export default function Dashboard() {
     }
   };
 
-  const handleEvaluateClick = async (tender: any) => {
-    setEvaluatingId(tender.id); 
+  const handleEvaluateClick = (tender: any) => {
     setSelectedTenderObj(tender);
-    
-    try {
-      const result = await evaluateTender('org-123', tender.id, dynamicContext || undefined); 
-      if (result) {
-        setEvaluationResult(result);
-      } else {
-        alert("Failed to evaluate.");
-      }
-    } finally {
-      setEvaluatingId(null); 
-    }
-  };
-
-  const handleSaveToPipeline = async () => {
-    const tenderToSave = selectedTenderObj || (tenders.length > 0 ? tenders[0] : null);
-    if (!tenderToSave) {
-      alert("No active tender selected to save.");
-      return;
-    }
-    setSavingId(true);
-    try {
-      const payloadTitle = tenderToSave.title || tenderToSave.tenderTitle || "Supply & Installation of IoT Wildlife Monitoring Cameras";
-      const payloadAuthority = tenderToSave.issuingAuthority || "Ministry of Environment";
-      const payloadValue = Number(tenderToSave.estimatedValue || 4500000);
-
-      const res = await fetch(`http://localhost:4000/organizations/org-123/pipeline/${tenderToSave.id || 'live-tender'}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: payloadTitle,
-          authority: payloadAuthority,
-          value: payloadValue
-        })
-      });
-      if (res.ok) {
-        alert("Successfully saved tender to your Bidding Pipeline!");
-        fetchPipeline();
-      } else {
-        alert("Failed to save to pipeline.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error saving to pipeline.");
-    } finally {
-      setSavingId(false);
-    }
   };
 
   const handleDeletePipelineItem = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/organizations/org-123/pipeline/${id}`, {
+      const res = await fetch(`http://localhost:4000/organizations/${authOrgId}/pipeline/${id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -143,6 +98,28 @@ export default function Dashboard() {
       console.error(err);
     }
   };
+
+  // If a tender is selected, render the detailed Evaluation View instead of the Feed
+  if (selectedTenderObj) {
+    return (
+      <div className="bg-gray-100 min-h-screen py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-4 flex justify-between items-center">
+          <button 
+            onClick={() => setSelectedTenderObj(null)}
+            className="text-blue-600 hover:text-blue-800 font-medium flex items-center bg-white px-4 py-2 rounded shadow-sm border border-gray-200"
+          >
+            ← Back to Feed
+          </button>
+        </div>
+        <TenderEvaluation 
+          organizationId={authOrgId} 
+          tenderId={selectedTenderObj.id || selectedTenderObj.referenceNumber} 
+          documentId={documentId} 
+          tenderTitle={selectedTenderObj.title || selectedTenderObj.tenderTitle}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 relative">
@@ -260,9 +237,6 @@ export default function Dashboard() {
                       <span className="text-xs font-mono bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20">
                         {tender.referenceNumber}
                       </span>
-                      <span className="text-xs text-slate-400 flex items-center">
-                        <Building2 className="w-3 h-3 mr-1" /> {tender.issuingAuthority || 'Government Authority'}
-                      </span>
                     </div>
                     <h4 className="text-sm font-medium text-white hover:text-indigo-400 cursor-pointer">
                       {tender.title}
@@ -275,29 +249,11 @@ export default function Dashboard() {
                   </div>
 
                   <div className="flex items-center space-x-4 self-end md:self-center">
-                    <div className="text-right">
-                      <div className="text-xs font-medium text-slate-400">AI Match</div>
-                      <div className="text-sm font-bold text-emerald-400">92%</div>
-                    </div>
-                    
                     <button 
                       onClick={() => handleEvaluateClick(tender)}
-                      disabled={evaluatingId === tender.id}
-                      className={`text-xs font-medium px-4 py-2 rounded-lg transition flex items-center space-x-1 shadow ${
-                        evaluatingId === tender.id ? 'bg-indigo-500/50 text-indigo-200 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                      }`}
+                      className="text-xs font-medium px-4 py-2 rounded-lg transition flex items-center space-x-1 shadow bg-indigo-600 hover:bg-indigo-700 text-white"
                     >
-                      {evaluatingId === tender.id ? (
-                        <>
-                          <span>Evaluating</span>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        </>
-                      ) : (
-                        <>
-                          <span>Evaluate</span>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                        </>
-                      )}
+                      View AI Evaluation
                     </button>
                   </div>
                 </div>
@@ -323,17 +279,11 @@ export default function Dashboard() {
                       <span className="text-xs font-mono bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
                         {item.status || 'Drafting'}
                       </span>
-                      <span className="text-xs text-slate-400 flex items-center">
-                        <Building2 className="w-3 h-3 mr-1" /> {item.issuingAuthority || 'Government Authority'}
-                      </span>
                     </div>
                     <h4 className="text-sm font-medium text-white">{item.tenderTitle && item.tenderTitle !== 'Untitled Tender' ? item.tenderTitle : 'Supply & Installation of IoT Wildlife Monitoring Cameras'}</h4>
                     <p className="text-xs text-slate-400">Estimated Value: ₹{Number(item.estimatedValue || 4500000).toLocaleString()}</p>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-lg">
-                      In Progress
-                    </span>
                     <button
                       onClick={() => handleDeletePipelineItem(item.id)}
                       className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 p-2 rounded-lg transition"
@@ -345,88 +295,6 @@ export default function Dashboard() {
                 </div>
               ))
             )}
-          </div>
-        </div>
-      )}
-
-      {/* AI Evaluation Modal */}
-      {evaluationResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-              <h2 className="text-lg font-semibold text-white flex items-center">
-                <CheckCircle2 className="w-5 h-5 text-indigo-400 mr-2" />
-                AI Gap Analysis Report {uploadedFile && <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded ml-3">RAG Context Active</span>}
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={handleSaveToPipeline}
-                  disabled={savingId}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition flex items-center space-x-1 shadow"
-                >
-                  {savingId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
-                  <span>Save to Pipeline</span>
-                </button>
-                <button 
-                  onClick={() => setEvaluationResult(null)} 
-                  className="text-slate-400 hover:text-white transition bg-slate-800 hover:bg-slate-700 p-1.5 rounded-lg"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 overflow-y-auto space-y-6">
-              <div className="flex space-x-4">
-                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex-1 text-center">
-                  <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Match Score</div>
-                  <div className="text-3xl font-bold text-emerald-400">{evaluationResult.matchScore}%</div>
-                </div>
-                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex-1 text-center">
-                  <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Status</div>
-                  <div className="text-xl font-bold text-indigo-400 pt-1">{evaluationResult.eligibilityStatus}</div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-white mb-2">Executive Summary</h3>
-                <p className="text-sm text-slate-300 leading-relaxed bg-slate-800/30 p-4 rounded-lg border border-slate-800">
-                  {evaluationResult.summary}
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-white mb-3 flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-2 text-amber-400" />
-                  Identified Gaps
-                </h3>
-                <ul className="space-y-2">
-                  {evaluationResult.gaps.map((gap: string, i: number) => (
-                    <li key={i} className="flex items-start text-sm text-slate-300">
-                      <span className="text-amber-400 mr-2 mt-0.5">•</span>
-                      {gap}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-white mb-3 flex items-center">
-                  <Lightbulb className="w-4 h-4 mr-2 text-emerald-400" />
-                  Bid Recommendations
-                </h3>
-                <ul className="space-y-2">
-                  {evaluationResult.recommendations.map((rec: string, i: number) => (
-                    <li key={i} className="flex items-start text-sm text-slate-300">
-                      <span className="text-emerald-400 mr-2 mt-0.5">•</span>
-                      {rec}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-            </div>
           </div>
         </div>
       )}
