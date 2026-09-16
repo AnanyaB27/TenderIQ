@@ -1,12 +1,13 @@
 // frontend/src/components/Dashboard.tsx
 
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, Shield, Loader2, Upload, FileText, Trash2 } from 'lucide-react';
+import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, Shield, Loader2, Upload, FileText, Trash2, Building } from 'lucide-react';
 import { fetchTendersFromDb, uploadDocument } from '../api';
 import { TenderEvaluation } from './TenderEvaluation';
+import { OrganizationProfile } from './OrganizationProfile';
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'pipeline'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'pipeline' | 'profile'>('feed');
   const [tenders, setTenders] = useState<any[]>([]);
   const [pipelineTenders, setPipelineTenders] = useState<any[]>([]);
   
@@ -18,21 +19,23 @@ export default function Dashboard() {
   // Evaluation Navigation State
   const [selectedTenderObj, setSelectedTenderObj] = useState<any | null>(null);
 
-  // In a real app this comes from Context/Redux. Fallback to localStorage.
-  const authOrgId = localStorage.getItem('activeOrganizationId') || 'org-123'; // Note: Keep org-123 fallback temporarily if your auth isn't fully wired yet
+  // Extract authenticated organization context dynamically
+  const authOrgId = localStorage.getItem('activeOrganizationId') || 'org-123';
 
   useEffect(() => {
-    fetch(`http://localhost:4000/organizations/${authOrgId}/tenders/sync-live`)
-      .catch(() => console.log('Live sync warming up...'))
-      .finally(() => {
-        fetchTendersFromDb(authOrgId).then((data) => {
-          if (data && data.length > 0) {
-            setTenders(data);
-          }
+    if (activeTab === 'feed' || activeTab === 'pipeline') {
+      fetch(`http://localhost:4000/organizations/${authOrgId}/tenders/sync-live`)
+        .catch(() => console.log('Live sync warming up...'))
+        .finally(() => {
+          fetchTendersFromDb(authOrgId).then((data) => {
+            if (data && data.length > 0) {
+              setTenders(data);
+            }
+          });
         });
-      });
-    fetchPipeline();
-  }, [authOrgId]);
+      fetchPipeline();
+    }
+  }, [authOrgId, activeTab]);
 
   const fetchPipeline = async () => {
     try {
@@ -71,7 +74,7 @@ export default function Dashboard() {
         setUploadedFile(null);
         setDocumentId(undefined);
       } else {
-        alert(result?.message || "Failed to process document. It may still be extracting or failed.");
+        alert(result?.message || "Failed to process document.");
       }
     } catch (err: any) {
       alert(err.message || "An error occurred during file upload and extraction.");
@@ -99,7 +102,6 @@ export default function Dashboard() {
     }
   };
 
-  // If a tender is selected, render the detailed Evaluation View instead of the Feed
   if (selectedTenderObj) {
     return (
       <div className="bg-gray-100 min-h-screen py-8">
@@ -123,7 +125,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 relative">
-      {/* Top Bar / Stats + RAG Document Uploader */}
+      {/* Top Stats & Uploader */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
@@ -201,25 +203,36 @@ export default function Dashboard() {
           >
             Active Bidding Pipeline ({pipelineTenders.length})
           </button>
-        </div>
-
-        <div className="flex items-center space-x-2 w-full md:w-auto">
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search tenders by keyword..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-          <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg border border-slate-700">
-            <Filter className="w-4 h-4" />
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`px-4 py-2 rounded-lg text-xs font-medium transition flex items-center space-x-1 ${
+              activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Building className="w-3.5 h-3.5 mr-1" />
+            <span>Organization Profile</span>
           </button>
         </div>
+
+        {activeTab !== 'profile' && (
+          <div className="flex items-center space-x-2 w-full md:w-auto">
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search tenders by keyword..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg border border-slate-700">
+              <Filter className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Conditional Content: Feed vs Pipeline */}
-      {activeTab === 'feed' ? (
+      {/* Tab Views */}
+      {activeTab === 'feed' && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-slate-800 flex justify-between items-center">
             <h3 className="text-sm font-semibold text-white">Recommended Tenders for Your Organization</h3>
@@ -261,7 +274,9 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'pipeline' && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-slate-800 flex justify-between items-center">
             <h3 className="text-sm font-semibold text-white">Active Bidding Pipeline</h3>
@@ -296,6 +311,12 @@ export default function Dashboard() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'profile' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <OrganizationProfile organizationId={authOrgId} />
         </div>
       )}
     </div>

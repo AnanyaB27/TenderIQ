@@ -22,6 +22,8 @@ import { PipelineItemEntity } from '@app/database/entities/pipeline/pipeline-ite
 import { OrganizationEntity } from '@app/database/entities/identity/organization.entity';
 import { TenderDocumentEntity } from '@app/database/entities/tender/tender-document.entity';
 import { TenderEvaluationEntity } from '@app/database/entities/ai/tender-evaluation.entity';
+import { MsmeProfileEntity } from '@app/database/entities/identity/msme-profile.entity';
+import { MsmeCertificationEntity } from '@app/database/entities/identity/msme-certification.entity';
 import { AiGatewayService } from './modules/ai/ai-gateway.service';
 
 import { JwtAuthGuard } from '../../../libs/common/guards/jwt-auth.guard';
@@ -40,6 +42,23 @@ export interface MulterFile {
 interface EvaluatePayload {
   documentId: string;
   dynamicContext?: string;
+}
+
+interface ParsedMsmeProfile {
+  turnoverInCrores?: number;
+  turnover?: number;
+  yearsOfExperience?: number;
+  experience?: number;
+  operatingLocations?: string[];
+  locations?: string[];
+  coreCapabilities?: string[];
+  capabilities?: string[];
+}
+
+interface ParsedCertification {
+  name?: string;
+  title?: string;
+  certificationName?: string;
 }
 
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
@@ -69,14 +88,55 @@ export class EvaluationController {
     const doc = await docRepo.findOne({ where: { id: payload.documentId, organizationId: orgId } });
     if (!doc) throw new NotFoundException(`Tender document ${payload.documentId} not found for this organization.`);
 
+    // 1. P1.7: Retrieve Factual MSME Profile & Certifications safely with strict typing
+    const profileRepo = this.dataSource.getRepository(MsmeProfileEntity);
+    const msmeProfile = await profileRepo.findOne({ where: { organizationId: orgId } });
+    
+    const certRepo = this.dataSource.getRepository(MsmeCertificationEntity);
+    const certs = await certRepo.find({ where: { organizationId: orgId } });
+
+    let orgCapabilitiesText = payload.dynamicContext;
+
+    if (!orgCapabilitiesText) {
+      if (msmeProfile) {
+        const profileData = msmeProfile as unknown as ParsedMsmeProfile;
+        
+        const certNames = certs.length > 0 
+          ? certs.map((c: MsmeCertificationEntity) => {
+              const certObj = c as unknown as ParsedCertification;
+              return certObj.name || certObj.title || certObj.certificationName || 'Certified';
+            }).join(', ') 
+          : 'None';
+        
+        const rawLocations = profileData.operatingLocations || profileData.locations;
+        const locations = Array.isArray(rawLocations) ? rawLocations.join(', ') : (rawLocations || 'Not specified');
+        
+        const rawCapabilities = profileData.coreCapabilities || profileData.capabilities;
+        const capabilities = Array.isArray(rawCapabilities) ? rawCapabilities.join(', ') : (rawCapabilities || 'Not specified');
+        
+        const turnover = profileData.turnoverInCrores ?? profileData.turnover ?? 0;
+        const experience = profileData.yearsOfExperience ?? profileData.experience ?? 0;
+        
+        orgCapabilitiesText = `
+Organization Factual Profile:
+- Annual Turnover: ${turnover} INR Crores
+- Years of Experience: ${experience} years
+- Operating Locations: ${locations}
+- Active Certifications: ${certNames}
+- Core Capabilities: ${capabilities}
+`;
+      } else {
+        orgCapabilitiesText = "Organization profile not fully configured. Defaulting to empty capabilities.";
+      }
+    }
+
     let evaluationResult;
 
-    // 1. Execute P0.9 AI Engine Pipeline
+    // 2. Execute P0.9 AI Engine Pipeline with Real Profile Data
     try {
-      const orgCapabilitiesText = payload.dynamicContext || "Core technical competencies in AI, ML, and hardware integration.";
       evaluationResult = await this.aiGatewayService.evaluateTenderMatch(orgId, {
         document_id: doc.id,
-        org_profile_text: orgCapabilitiesText
+        org_profile_text: orgCapabilitiesText.trim()
       });
     } catch (error: unknown) {
       const err = error as Error;
@@ -86,7 +146,7 @@ export class EvaluationController {
       throw new InternalServerErrorException(`AI Engine Evaluation Failed: ${err.message}`);
     }
 
-    // 2. P1.4 Database Persistence (Idempotent Upsert)
+    // 3. P1.4 Database Persistence (Idempotent Upsert)
     try {
       const evalRepo = this.dataSource.getRepository(TenderEvaluationEntity);
       let evaluation = await evalRepo.findOne({ 
@@ -126,7 +186,6 @@ export class EvaluationController {
   ) {
     const evalRepo = this.dataSource.getRepository(TenderEvaluationEntity);
     
-    // SECURITY: Implicit Tenant Isolation applied via 'organizationId: orgId'
     const whereClause: { organizationId: string; tenderId: string; documentId?: string } = { 
       organizationId: orgId, 
       tenderId: tenderId 
@@ -145,7 +204,6 @@ export class EvaluationController {
       throw new NotFoundException('No evaluation record found for this tender.');
     }
 
-    // Map back to frontend expected EvaluationResult schema
     return {
       tenderId: evaluation.tenderId,
       organizationId: evaluation.organizationId,
@@ -173,18 +231,16 @@ export class EvaluationController {
 
     const docRepo = this.dataSource.getRepository(TenderDocumentEntity);
 
-    // 1. Create document in DB FIRST to reserve UUID and set INITIAL status
     let newDoc = docRepo.create({
       organizationId: orgId,
       fileName: file.originalname,
       fileType: file.mimetype,
       fileSize: file.size,
-      extractionStatus: 'PROCESSING', // Locks the UI/Eval endpoint
+      extractionStatus: 'PROCESSING',
     } as Partial<TenderDocumentEntity>);
     newDoc = await docRepo.save(newDoc);
 
     try {
-      // 2. Transmit to AI Engine for synchronous P1.2 Pipeline (Extract -> Chunk -> Embed -> PGVector)
       const aiResponse = await this.aiGatewayService.extractDocumentText(
           newDoc.id, 
           file.buffer, 
@@ -192,7 +248,6 @@ export class EvaluationController {
           file.originalname
       );
 
-      // 3. Mark READY upon successful pgvector completion
       newDoc.extractionStatus = aiResponse.status === 'SUCCESS' ? 'READY' : 'FAILED';
       if (aiResponse.status === 'NO_EXTRACTABLE_TEXT') {
           newDoc.extractionStatus = 'NO_EXTRACTABLE_TEXT';
@@ -210,7 +265,6 @@ export class EvaluationController {
         extractedText: newDoc.extractedText
       };
     } catch (error) {
-      // 4. Safely revert status on internal failure
       newDoc.extractionStatus = 'FAILED';
       await docRepo.save(newDoc);
       throw error;
@@ -220,7 +274,6 @@ export class EvaluationController {
   @Get('tenders/sync-live')
   async syncLiveTenders(@Param('orgId') orgId: string) {
     try {
-      // 1. Fetch normalized data from AI Engine Connector
       const response = await fetch('http://localhost:8000/internal/tenders/live-feed');
       if (!response.ok) {
         throw new Error(`Failed to fetch from Python ingestion engine: ${response.status}`);
@@ -233,29 +286,25 @@ export class EvaluationController {
       let updated = 0;
       let failed = 0;
 
-      // 2. Idempotent Upsert Logic (Deduplication)
       for (const item of liveItems) {
         try {
           if (!item.referenceNumber || !item.title) {
             failed++;
-            continue; // Skip invalid normalized payloads
+            continue;
           }
 
           let existing = await tenderRepo.findOne({ where: { referenceNumber: item.referenceNumber } });
           
           if (existing) {
-            // UPSERT: Update existing tender with fresh external data
             tenderRepo.merge(existing, {
               title: item.title,
               issuingAuthority: item.issuingAuthority,
               estimatedValue: item.estimatedValue || existing.estimatedValue,
               description: item.description,
-              // Preserving existing internal tracking fields
             });
             await tenderRepo.save(existing);
             updated++;
           } else {
-            // INSERT: Create brand new tender
             const newTender = tenderRepo.create({
               referenceNumber: item.referenceNumber,
               title: item.title,
@@ -273,7 +322,6 @@ export class EvaluationController {
         }
       }
 
-      // 3. Return structured ingestion statistics
       return { 
         success: true, 
         stats: {
@@ -336,7 +384,6 @@ export class EvaluationController {
   async deleteFromPipeline(@Param('orgId') orgId: string, @Param('id') id: string) {
     const pipelineRepo = this.dataSource.getRepository(PipelineItemEntity);
     
-    // IDOR Protection: Ensure the pipeline item belongs to the requested organization
     const item = await pipelineRepo.findOne({ where: { id, organizationId: orgId } });
     if (!item) {
       throw new NotFoundException('Pipeline item not found for this organization.');

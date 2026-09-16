@@ -141,3 +141,53 @@ export async function fetchTendersFromDb(organizationId: string) {
     return [];
   }
 }
+
+// ... (existing imports and Evaluation functions) ...
+
+export interface MsmeProfile {
+  id?: string;
+  organizationId: string;
+  turnoverInCrores: number;
+  yearsOfExperience: number;
+  operatingLocations: string[];
+  coreCapabilities: string[];
+}
+
+export interface Certification {
+  id: string;
+  name: string;
+  issuedBy: string;
+  validUntil: string;
+}
+
+export async function getMsmeProfile(organizationId: string): Promise<MsmeProfile | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/msme-profile`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching MSME profile:', error);
+    return null;
+  }
+}
+
+export async function updateMsmeProfile(organizationId: string, profile: Partial<MsmeProfile>): Promise<MsmeProfile | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/msme-profile`, {
+      method: 'PUT', // or PATCH depending on existing backend convention
+      headers: getAuthHeaders(),
+      body: JSON.stringify(profile),
+    });
+    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating MSME profile:', error);
+    return null;
+  }
+}
