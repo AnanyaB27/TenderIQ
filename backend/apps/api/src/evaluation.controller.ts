@@ -241,20 +241,32 @@ Organization Factual Profile:
     newDoc = await docRepo.save(newDoc);
 
     try {
+      // Execute Advanced P1.9 Pipeline
       const aiResponse = await this.aiGatewayService.extractDocumentText(
           newDoc.id, 
           file.buffer, 
           file.mimetype, 
           file.originalname
-      );
+      ) as { 
+        status: string; 
+        extracted_text?: string; 
+        page_count?: number; 
+        summary?: string; 
+        metadata?: object 
+      };
 
       newDoc.extractionStatus = aiResponse.status === 'SUCCESS' ? 'READY' : 'FAILED';
       if (aiResponse.status === 'NO_EXTRACTABLE_TEXT') {
           newDoc.extractionStatus = 'NO_EXTRACTABLE_TEXT';
       }
       
-      newDoc.extractedText = (aiResponse.extracted_text as string) || null;
-      newDoc.pageCount = (aiResponse.page_count as number) || 0;
+      newDoc.extractedText = aiResponse.extracted_text || null;
+      newDoc.pageCount = aiResponse.page_count || 0;
+      
+      // Persist P1.9 Document Intelligence
+      newDoc.documentSummary = aiResponse.summary || null;
+      newDoc.extractedMetadata = aiResponse.metadata || null;
+      
       await docRepo.save(newDoc);
 
       return {
@@ -262,7 +274,8 @@ Organization Factual Profile:
         filename: newDoc.fileName,
         status: newDoc.extractionStatus,
         pageCount: newDoc.pageCount,
-        extractedText: newDoc.extractedText
+        documentSummary: newDoc.documentSummary,
+        metadata: newDoc.extractedMetadata
       };
     } catch (error) {
       newDoc.extractionStatus = 'FAILED';

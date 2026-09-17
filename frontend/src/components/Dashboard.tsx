@@ -22,6 +22,10 @@ export default function Dashboard() {
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | undefined>(undefined);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  
+  // P1.9 Document Intelligence State
+  const [documentSummary, setDocumentSummary] = useState<string | null>(null);
+  const [documentMetadata, setDocumentMetadata] = useState<any | null>(null);
 
   // Evaluation Navigation State
   const [selectedTenderObj, setSelectedTenderObj] = useState<Tender | null>(null);
@@ -89,10 +93,15 @@ export default function Dashboard() {
       if (result && result.status === 'READY') {
         setUploadedFile(result.filename);
         setDocumentId(result.id);
+        // P1.9 Populate Document Intelligence
+        setDocumentSummary(result.documentSummary || null);
+        setDocumentMetadata(result.metadata || null);
       } else if (result && result.status === 'NO_EXTRACTABLE_TEXT') {
         alert("The PDF was parsed but contains no extractable text. Scanned PDFs (OCR) are not yet supported.");
         setUploadedFile(null);
         setDocumentId(undefined);
+        setDocumentSummary(null);
+        setDocumentMetadata(null);
       } else {
         alert(result?.message || "Failed to process document.");
       }
@@ -126,6 +135,8 @@ export default function Dashboard() {
     setInspectingTender(null);
     setUploadedFile(null);
     setDocumentId(undefined);
+    setDocumentSummary(null);
+    setDocumentMetadata(null);
   };
 
   // View: Evaluation Dashboard (P1.5)
@@ -150,7 +161,7 @@ export default function Dashboard() {
     );
   }
 
-  // View: Tender Detail Inspector (P1.8)
+  // View: Tender Detail Inspector (P1.8 + P1.9)
   if (inspectingTender) {
     return (
       <div className="max-w-5xl mx-auto p-6 space-y-6 mt-6">
@@ -194,19 +205,45 @@ export default function Dashboard() {
                 </label>
               </div>
             ) : (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center">
-                <div>
-                  <p className="text-sm font-medium text-emerald-800 flex items-center">
-                    <CheckCircle2 className="w-4 h-4 mr-1"/> Document Processed
-                  </p>
-                  <p className="text-xs text-emerald-700 mt-1">The document {uploadedFile} has been chunked and vectorized. Ready for evaluation.</p>
+              <div className="space-y-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center shadow-sm">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-800 flex items-center">
+                      <CheckCircle2 className="w-4 h-4 mr-1"/> Document Processed Successfully
+                    </p>
+                    <p className="text-xs text-emerald-700 mt-1">The document {uploadedFile} has been chunked and vectorized.</p>
+                  </div>
+                  <button 
+                    onClick={() => handleEvaluateClick(inspectingTender)} 
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition flex items-center"
+                  >
+                    <FileText className="w-4 h-4 mr-2"/> Run AI Match Evaluation
+                  </button>
                 </div>
-                <button 
-                  onClick={() => handleEvaluateClick(inspectingTender)} 
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition flex items-center"
-                >
-                  <FileText className="w-4 h-4 mr-2"/> Run AI Evaluation
-                </button>
+
+                {/* P1.9 Document Intelligence Panel */}
+                {documentSummary && (
+                  <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm mt-4">
+                    <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                      <FileText className="w-4 h-4 mr-2 text-indigo-500" />
+                      AI Document Summary
+                    </h4>
+                    <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded border border-gray-100">
+                      {documentSummary}
+                    </p>
+                    
+                    {documentMetadata?.eligibility_highlights && (
+                      <div className="mt-4">
+                        <h5 className="text-xs font-semibold text-gray-500 uppercase mb-2">Key Highlights</h5>
+                        <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                          {documentMetadata.eligibility_highlights.map((highlight: string, idx: number) => (
+                            <li key={idx}>{highlight}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

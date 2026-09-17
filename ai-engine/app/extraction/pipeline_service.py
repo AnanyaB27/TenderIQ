@@ -1,99 +1,139 @@
+import io
+import re
 import hashlib
 import uuid
 import asyncio
-from typing import Dict, Any
+import json
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from pypdf import PdfReader
 from app.embeddings.embedding_client import EmbeddingClient
+import google.generativeai as genai
 
-# Gracefully import existing P0 components
-try:
-    from app.parsing.pdf_parser import PdfParser
-except ImportError:
-    PdfParser = None
+class StructuredTenderMetadata(BaseModel):
+    summary: str
+    eligibility_highlights: List[str]
+    procurement_type: str
 
-try:
-    from app.chunking.chunker import Chunker
-except ImportError:
-    Chunker = None
+class DocumentChunk(BaseModel):
+    text: str
+    page_start: int
+    page_end: int
+    section_heading: Optional[str]
 
 class DocumentPipelineService:
-    """
-    Orchestrates the P1.2 complete document processing workflow:
-    Extraction -> Chunking -> Gemini Embedding -> pgvector Persistence
-    """
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
         self.embedding_client = EmbeddingClient()
-        self.pdf_parser = PdfParser() if PdfParser else None
-        self.chunker = Chunker() if Chunker else None
+        # Initialize Gemini for structured intelligence extraction
+        self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
     async def process_document(self, document_id: str, file_bytes: bytes) -> Dict[str, Any]:
         # ---------------------------------------------------------
-        # STEP 1 & 2: VALIDATE AND EXTRACT TEXT (P0.2)
+        # P1.9-A: LAYOUT-AWARE PDF EXTRACTION & SCANNED PDF DETECTION
         # ---------------------------------------------------------
-        extracted_text = ""
-        page_count = 0
+        reader = PdfReader(io.BytesIO(file_bytes))
+        page_count = len(reader.pages)
+        raw_pages = []
+        total_text_length = 0
 
-        if self.pdf_parser and hasattr(self.pdf_parser, 'parse'):
-            if asyncio.iscoroutinefunction(self.pdf_parser.parse):
-                parse_res = await self.pdf_parser.parse(file_bytes)
-            else:
-                parse_res = self.pdf_parser.parse(file_bytes)
-            extracted_text = parse_res.get("text", "")
-            page_count = parse_res.get("page_count", 0)
-        else:
-            # Fallback robust pypdf extraction if existing interface varies
-            import io
-            from pypdf import PdfReader
-            reader = PdfReader(io.BytesIO(file_bytes))
-            page_count = len(reader.pages)
-            extracted_text = "\n\n".join([p.extract_text() or "" for p in reader.pages])
+        for i, page in enumerate(reader.pages):
+            # pypdf layout preservation keeps basic table spacing intact
+            text_content = page.extract_text(extraction_mode="layout") or ""
+            clean_text = text_content.strip()
+            total_text_length += len(clean_text)
+            raw_pages.append({"page_num": i + 1, "text": clean_text})
 
-        if not extracted_text.strip():
-            return {"status": "NO_EXTRACTABLE_TEXT", "extracted_text": "", "page_count": page_count}
+        # P1.9-A Safety: If document has pages but almost no text, it's a scanned image.
+        if page_count > 0 and total_text_length < (page_count * 50):
+            return {
+                "status": "NO_EXTRACTABLE_TEXT", 
+                "extracted_text": "", 
+                "page_count": page_count,
+                "summary": None,
+                "metadata": None
+            }
+
+        full_extracted_text = "\n\n".join([p["text"] for p in raw_pages if p["text"]])
 
         # ---------------------------------------------------------
-        # STEP 3: SEMANTIC CHUNKING (P0.3)
+        # P1.9-C: SEMANTIC CHUNKING WITH HEADING & PAGE TRACKING
         # ---------------------------------------------------------
-        chunks = []
-        if self.chunker and hasattr(self.chunker, 'chunk'):
-            chunks_raw = self.chunker.chunk(extracted_text)
-            # Normalize to dict ensuring backward compatibility with P0.3
-            for i, c in enumerate(chunks_raw):
-                if isinstance(c, dict):
-                    chunks.append(c)
-                elif hasattr(c, 'text'):
-                    chunks.append({
-                        "text": getattr(c, 'text'),
-                        "page_start": getattr(c, 'page_start', 1),
-                        "page_end": getattr(c, 'page_end', 1),
-                        "section_heading": getattr(c, 'section_heading', None)
-                    })
-                else:
-                    chunks.append({"text": str(c), "page_start": 1, "page_end": 1, "section_heading": None})
-        else:
-            # Deterministic fallback semantic chunker
-            paragraphs = [p.strip() for p in extracted_text.split("\n\n") if len(p.strip()) > 50]
-            chunks = [{"text": p, "page_start": 1, "page_end": 1, "section_heading": "General"} for p in paragraphs]
+        chunks: List[DocumentChunk] = []
+        current_heading = "General"
+        
+        # Regex to detect standard tender section headings (e.g., "1.0 INTRODUCTION", "SECTION II")
+        heading_pattern = re.compile(r'^(?:SECTION\s+[IVX\d]+|[\d\.]+\s+)[A-Z][A-Z\s]+$')
+
+        for page_data in raw_pages:
+            paragraphs = [p.strip() for p in page_data["text"].split("\n\n") if len(p.strip()) > 40]
+            
+            for para in paragraphs:
+                lines = para.split("\n")
+                if len(lines) == 1 and heading_pattern.match(lines[0].strip()):
+                    current_heading = lines[0].strip()
+                    continue # Headings act as metadata boundaries, not standalone chunks
+                
+                chunks.append(DocumentChunk(
+                    text=para,
+                    page_start=page_data["page_num"],
+                    page_end=page_data["page_num"],
+                    section_heading=current_heading
+                ))
 
         if not chunks:
-             return {"status": "NO_EXTRACTABLE_TEXT", "extracted_text": extracted_text, "page_count": page_count}
+             return {"status": "NO_EXTRACTABLE_TEXT", "extracted_text": full_extracted_text, "page_count": page_count}
 
         # ---------------------------------------------------------
-        # STEP 5: GEMINI EMBEDDING GENERATION (P0.4)
+        # P0.4: GEMINI EMBEDDING BATCH GENERATION (768-dim)
         # ---------------------------------------------------------
-        texts_to_embed = [c["text"] for c in chunks]
+        texts_to_embed = [c.text for c in chunks]
         try:
             embeddings = await self.embedding_client.embed_batch(texts_to_embed)
         except Exception as e:
             print(f"Gemini Embedding failed: {e}")
-            return {"status": "EMBEDDING_FAILED", "extracted_text": extracted_text, "page_count": page_count}
+            return {"status": "EMBEDDING_FAILED", "extracted_text": full_extracted_text, "page_count": page_count}
 
         # ---------------------------------------------------------
-        # STEP 4, 6, & 8: IDEMPOTENT PGVECTOR PERSISTENCE
+        # P1.9-B & P1.9-D: GROUNDED DOCUMENT SUMMARY & METADATA
         # ---------------------------------------------------------
-        # Enforce idempotency by flushing previous chunks for this document
+        document_summary = None
+        structured_metadata = None
+        
+        try:
+            # Bound context window to prevent massive payload timeouts. First 5 and last 5 chunks often contain scopes/deadlines.
+            context_chunks = chunks[:10] + chunks[-5:] if len(chunks) > 15 else chunks
+            context_text = "\n---\n".join([c.text for c in context_chunks])
+            
+            prompt = f"""
+            Analyze the following excerpts from a government tender document.
+            Extract a concise executive summary, key eligibility highlights, and the general procurement type (e.g., IT Services, Construction, Goods).
+            Do NOT fabricate information. If a detail is missing, omit it.
+            
+            Document Excerpts:
+            {context_text}
+            """
+            
+            # Request strictly typed JSON response
+            resp = self.gemini_model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    response_schema=StructuredTenderMetadata
+                )
+            )
+            parsed_meta = json.loads(resp.text)
+            document_summary = parsed_meta.get("summary")
+            structured_metadata = parsed_meta
+        except Exception as e:
+            print(f"Structured Intelligence extraction skipped/failed: {e}")
+            # Non-fatal. Continue persistence.
+
+        # ---------------------------------------------------------
+        # P1.2: IDEMPOTENT PGVECTOR PERSISTENCE
+        # ---------------------------------------------------------
         await self.db.execute(
             text("DELETE FROM tender_document_chunks WHERE document_id = :doc_id"),
             {"doc_id": document_id}
@@ -107,24 +147,28 @@ class DocumentPipelineService:
         """)
 
         for idx, chunk in enumerate(chunks):
-            chunk_text = chunk["text"]
-            emb_vector = embeddings[idx]
-            emb_str = f"[{','.join(map(str, emb_vector))}]"
-            chunk_hash = hashlib.sha256(chunk_text.encode('utf-8')).hexdigest()
+            emb_str = f"[{','.join(map(str, embeddings[idx]))}]"
+            chunk_hash = hashlib.sha256(chunk.text.encode('utf-8')).hexdigest()
 
             await self.db.execute(insert_sql, {
                 "id": str(uuid.uuid4()),
                 "doc_id": document_id,
                 "hash": chunk_hash,
                 "seq": idx + 1,
-                "txt": chunk_text,
-                "p_start": chunk.get("page_start", 1),
-                "p_end": chunk.get("page_end", 1),
-                "sec": chunk.get("section_heading", None),
-                "chars": len(chunk_text),
+                "txt": chunk.text,
+                "p_start": chunk.page_start,
+                "p_end": chunk.page_end,
+                "sec": chunk.section_heading,
+                "chars": len(chunk.text),
                 "emb": emb_str
             })
 
         await self.db.commit()
 
-        return {"status": "SUCCESS", "extracted_text": extracted_text, "page_count": page_count}
+        return {
+            "status": "SUCCESS", 
+            "extracted_text": full_extracted_text, 
+            "page_count": page_count,
+            "summary": document_summary,
+            "metadata": structured_metadata
+        }

@@ -75,8 +75,6 @@ export async function getTenderEvaluation(
   }
 }
 
-// ... (existing imports and Evaluation interfaces remain unchanged) ...
-
 export interface Tender {
   id: string;
   referenceNumber: string;
@@ -129,8 +127,6 @@ export async function getTenders(params: GetTendersParams): Promise<PaginatedTen
   }
 }
 
-// ... (existing evaluateTender, getTenderEvaluation, updateMsmeProfile remain identical) ...
-
 export async function evaluateTender(
   organizationId: string, 
   tenderId: string, 
@@ -155,7 +151,21 @@ export async function evaluateTender(
   }
 }
 
-export async function uploadDocument(organizationId: string, file: File) {
+// P1.9 Updated Document Upload Result Interface
+export interface DocumentUploadResult {
+  id: string;
+  filename: string;
+  status: string;
+  pageCount: number;
+  documentSummary?: string | null;
+  metadata?: {
+    eligibility_highlights?: string[];
+    procurement_type?: string;
+  } | null;
+  message?: string;
+}
+
+export async function uploadDocument(organizationId: string, file: File): Promise<DocumentUploadResult | null> {
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -198,8 +208,6 @@ export async function fetchTendersFromDb(organizationId: string) {
   }
 }
 
-// ... (existing imports and Evaluation functions) ...
-
 export interface MsmeProfile {
   id?: string;
   organizationId: string;
@@ -236,7 +244,7 @@ export async function getMsmeProfile(organizationId: string): Promise<MsmeProfil
 export async function updateMsmeProfile(organizationId: string, profile: Partial<MsmeProfile>): Promise<MsmeProfile | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/msme-profile`, {
-      method: 'PUT', // or PATCH depending on existing backend convention
+      method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(profile),
     });

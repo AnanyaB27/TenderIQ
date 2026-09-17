@@ -1,34 +1,41 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('tender_documents')
 export class TenderDocumentEntity {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
-  @Column({ name: 'tender_id', nullable: true })
-  tenderId: string;
+  @Column('uuid')
+  organizationId!: string;
 
-  @Column({ name: 'organization_id', nullable: true })
-  organizationId: string;
+  @Column({ type: 'varchar', length: 255 })
+  fileName!: string;
 
-  @Column({ name: 'file_name' })
-  fileName: string;
+  @Column({ type: 'varchar', length: 100 })
+  fileType!: string;
 
-  @Column({ name: 'file_type', default: 'application/pdf' })
-  fileType: string;
+  @Column({ type: 'int' })
+  fileSize!: number;
 
-  @Column({ name: 'file_size', type: 'int', default: 0 })
-  fileSize: number;
+  @Column({ type: 'varchar', length: 50, default: 'PROCESSING' })
+  extractionStatus!: string;
 
-  @Column({ name: 'page_count', type: 'int', default: 0 })
-  pageCount: number;
+  @Column({ type: 'int', default: 0 })
+  pageCount!: number;
 
-  @Column({ name: 'extraction_status', default: 'PENDING' })
-  extractionStatus: string;
+  @Column({ type: 'text', nullable: true })
+  extractedText!: string | null;
 
-  @Column({ name: 'extracted_text', type: 'text', nullable: true })
-  extractedText: string;
+  // --- NEW P1.9 DOCUMENT INTELLIGENCE FIELDS ---
+  @Column({ type: 'text', nullable: true })
+  documentSummary!: string | null;
 
-  @CreateDateColumn({ name: 'uploaded_at' })
-  uploadedAt: Date;
+  @Column({ type: 'jsonb', nullable: true })
+  extractedMetadata!: object | null;
+
+  @CreateDateColumn()
+  uploadedAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
