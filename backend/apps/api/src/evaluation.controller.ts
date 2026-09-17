@@ -24,6 +24,7 @@ import { TenderDocumentEntity } from '@app/database/entities/tender/tender-docum
 import { TenderEvaluationEntity } from '@app/database/entities/ai/tender-evaluation.entity';
 import { MsmeProfileEntity } from '@app/database/entities/identity/msme-profile.entity';
 import { MsmeCertificationEntity } from '@app/database/entities/identity/msme-certification.entity';
+import { TenderDraftEntity } from '@app/database/entities/tender/tender-draft.entity';
 import { AiGatewayService } from './modules/ai/ai-gateway.service';
 
 import { JwtAuthGuard } from '../../../libs/common/guards/jwt-auth.guard';
@@ -42,6 +43,11 @@ export interface MulterFile {
 interface EvaluatePayload {
   documentId: string;
   dynamicContext?: string;
+}
+
+interface GenerateDraftPayload {
+  documentId: string;
+  draftType: string;
 }
 
 interface ParsedMsmeProfile {
@@ -217,6 +223,102 @@ Organization Factual Profile:
       ruleResults: evaluation.ruleResults
     };
   }
+
+  // --- NEW P1.10 BID DRAFTING ENDPOINTS ---
+  @Post('tenders/:tenderId/drafts')
+  async generateOrUpdateDraft(
+    @Param('orgId') orgId: string,
+    @Param('tenderId') tenderId: string,
+    @Body() payload: GenerateDraftPayload
+  ) {
+    if (!payload.documentId || !payload.draftType) {
+      throw new BadRequestException('documentId and draftType are required.');
+    }
+
+    const docRepo = this.dataSource.getRepository(TenderDocumentEntity);
+    const doc = await docRepo.findOne({ where: { id: payload.documentId, organizationId: orgId } });
+    if (!doc) throw new NotFoundException('Document not found or access denied.');
+
+    const profileRepo = this.dataSource.getRepository(MsmeProfileEntity);
+    const msmeProfile = await profileRepo.findOne({ where: { organizationId: orgId } });
+    
+    let orgProfileText = "Organization profile not fully configured.";
+    if (msmeProfile) {
+      const profileData = msmeProfile as unknown as ParsedMsmeProfile;
+      const turnover = profileData.turnoverInCrores ?? profileData.turnover ?? 0;
+      const experience = profileData.yearsOfExperience ?? profileData.experience ?? 0;
+      const rawCapabilities = profileData.coreCapabilities || profileData.capabilities;
+      const capabilities = Array.isArray(rawCapabilities) ? rawCapabilities.join(', ') : (rawCapabilities || 'Not specified');
+      
+      orgProfileText = `Turnover: ${turnover} Cr | Experience: ${experience} Yrs | Capabilities: ${capabilities}`;
+    }
+
+    const evalRepo = this.dataSource.getRepository(TenderEvaluationEntity);
+    const evaluation = await evalRepo.findOne({ where: { organizationId: orgId, tenderId, documentId: doc.id } });
+    const evalSummary = evaluation ? evaluation.summary : 'No AI evaluation available.';
+
+    try {
+      const response = await fetch('http://localhost:8000/internal/drafts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          document_id: doc.id,
+          draft_type: payload.draftType,
+          org_profile_text: orgProfileText,
+          evaluation_summary: evalSummary
+        })
+      });
+
+      if (!response.ok) throw new Error(`FastAPI Error: ${response.status}`);
+      const aiResponse = await response.json();
+
+      if (aiResponse.status === 'FAILED') {
+        throw new InternalServerErrorException('AI Engine failed to generate draft.');
+      }
+
+      const draftRepo = this.dataSource.getRepository(TenderDraftEntity);
+      let draftRecord = await draftRepo.findOne({
+        where: { organizationId: orgId, tenderId, documentId: doc.id, draftType: payload.draftType }
+      });
+
+      if (!draftRecord) {
+        draftRecord = draftRepo.create({
+          organizationId: orgId,
+          tenderId,
+          documentId: doc.id,
+          draftType: payload.draftType
+        });
+      }
+
+      draftRecord.content = aiResponse.draft;
+      draftRecord.usedSources = aiResponse.usedSources;
+      draftRecord.missingInformation = aiResponse.missingInformation;
+      draftRecord.warnings = aiResponse.warnings;
+
+      await draftRepo.save(draftRecord);
+      return draftRecord;
+
+    } catch (error) {
+      console.error('Draft generation error:', error);
+      throw new InternalServerErrorException('Failed to generate or save bid draft.');
+    }
+  }
+
+  @Get('tenders/:tenderId/drafts')
+  async getDrafts(
+    @Param('orgId') orgId: string,
+    @Param('tenderId') tenderId: string,
+    @Query('documentId') documentId: string
+  ) {
+    if (!documentId) throw new BadRequestException('documentId query parameter is required.');
+    
+    const draftRepo = this.dataSource.getRepository(TenderDraftEntity);
+    return await draftRepo.find({
+      where: { organizationId: orgId, tenderId, documentId },
+      order: { updatedAt: 'DESC' }
+    });
+  }
+  // ----------------------------------------
 
   @Post('documents/extract')
   @UseInterceptors(FileInterceptor('file'))

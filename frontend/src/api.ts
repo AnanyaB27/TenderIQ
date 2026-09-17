@@ -255,3 +255,46 @@ export async function updateMsmeProfile(organizationId: string, profile: Partial
     return null;
   }
 }
+
+// --- NEW P1.10 BID DRAFTING API ---
+export interface DraftResult {
+  id: string;
+  draftType: string;
+  content: string;
+  usedSources: string[];
+  missingInformation: string[];
+  warnings: string[];
+  updatedAt: string;
+}
+
+export async function generateBidDraft(
+  organizationId: string, tenderId: string, documentId: string, draftType: string
+): Promise<DraftResult | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/tenders/${tenderId}/drafts`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ documentId, draftType })
+    });
+    if (!response.ok) throw new Error('Failed to generate draft');
+    return await response.json();
+  } catch (err) {
+    console.error('Error generating bid draft:', err);
+    return null;
+  }
+}
+
+export async function getBidDrafts(
+  organizationId: string, tenderId: string, documentId: string
+): Promise<DraftResult[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/tenders/${tenderId}/drafts?documentId=${documentId}`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) return [];
+    return await response.json();
+  } catch (err) {
+    console.error('Error fetching bid drafts:', err);
+    return [];
+  }
+}
