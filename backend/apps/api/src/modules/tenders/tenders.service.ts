@@ -1,72 +1,64 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-
 import { TenderEntity } from '@app/database/entities/tender/tender.entity';
-
-import {
-  CreateTenderDto,
-  UpdateTenderDto,
-} from './dto';
+import { GetTendersDto } from './dto/get-tenders.dto';
 
 @Injectable()
 export class TendersService {
   constructor(
     @InjectRepository(TenderEntity)
-    private readonly tenderRepository: Repository<TenderEntity>,
+    private readonly tenderRepo: Repository<TenderEntity>,
   ) {}
 
-  async create(
-    dto: CreateTenderDto,
-  ): Promise<TenderEntity> {
-    const tender = this.tenderRepository.create(dto);
+  async findAll(query: GetTendersDto) {
+    const { 
+      search, category, authority, 
+      sortBy = 'createdAt', sortOrder = 'DESC', 
+      page = 1, limit = 10 
+    } = query;
 
-    return this.tenderRepository.save(tender);
-  }
+    const qb = this.tenderRepo.createQueryBuilder('tender');
 
-  async findAll(): Promise<TenderEntity[]> {
-    return this.tenderRepository.find({
-      order: {
-        createdAt: 'DESC',
-      },
-    });
-  }
-
-  async findOne(id: string): Promise<TenderEntity> {
-    const tender = await this.tenderRepository.findOneBy({
-      id,
-    });
-
-    if (!tender) {
-      throw new NotFoundException(
-        `Tender with ID '${id}' was not found.`,
+    // Deterministic Text Search (Parameterized to prevent SQL injection)
+    if (search) {
+      qb.andWhere(
+        '(tender.title ILIKE :search OR tender.referenceNumber ILIKE :search OR tender.description ILIKE :search)',
+        { search: `%${search}%` }
       );
     }
 
-    return tender;
-  }
+    // Exact Match Filters
+    if (category) {
+      qb.andWhere('tender.procurementCategory = :category', { category });
+    }
+    if (authority) {
+      qb.andWhere('tender.issuingAuthority = :authority', { authority });
+    }
 
-  async update(
-    id: string,
-    dto: UpdateTenderDto,
-  ): Promise<TenderEntity> {
-    const tender = await this.findOne(id);
+    // Whitelisted sorting to prevent arbitrary column execution
+    const allowedSortColumns = ['title', 'estimatedValue', 'createdAt', 'submissionDeadline'];
+    const actualSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'createdAt';
+    
+    qb.orderBy(`tender.${actualSortBy}`, sortOrder);
+    qb.skip((page - 1) * limit).take(limit);
 
-    this.tenderRepository.merge(tender, dto);
-
-    return this.tenderRepository.save(tender);
-  }
-
-  async remove(
-    id: string,
-  ): Promise<{ success: boolean; message: string }> {
-    await this.findOne(id);
-
-    await this.tenderRepository.delete(id);
+    const [items, total] = await qb.getManyAndCount();
 
     return {
-      success: true,
-      message: 'Tender deleted successfully.',
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async findOne(id: string): Promise<TenderEntity> {
+    const tender = await this.tenderRepo.findOne({ where: { id } });
+    if (!tender) {
+      throw new NotFoundException(`Tender with ID ${id} not found.`);
+    }
+    return tender;
   }
 }

@@ -75,6 +75,62 @@ export async function getTenderEvaluation(
   }
 }
 
+// ... (existing imports and Evaluation interfaces remain unchanged) ...
+
+export interface Tender {
+  id: string;
+  referenceNumber: string;
+  title: string;
+  issuingAuthority: string;
+  estimatedValue?: number;
+  procurementCategory?: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface GetTendersParams {
+  search?: string;
+  category?: string;
+  authority?: string;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedTenders {
+  items: Tender[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export async function getTenders(params: GetTendersParams): Promise<PaginatedTenders | null> {
+  try {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+    if (params.category) query.append('category', params.category);
+    if (params.sortBy) query.append('sortBy', params.sortBy);
+    if (params.sortOrder) query.append('sortOrder', params.sortOrder);
+    if (params.page) query.append('page', params.page.toString());
+    if (params.limit) query.append('limit', params.limit.toString());
+
+    const response = await fetch(`${API_BASE_URL}/tenders?${query.toString()}`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching tenders:', error);
+    return null;
+  }
+}
+
+// ... (existing evaluateTender, getTenderEvaluation, updateMsmeProfile remain identical) ...
+
 export async function evaluateTender(
   organizationId: string, 
   tenderId: string, 
