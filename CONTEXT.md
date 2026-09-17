@@ -1,6 +1,6 @@
 # TenderIQ — Project Context
 
-*A condensed, self-contained summary for use as memory/context in external AI tools (ChatGPT, Gemini, etc.) that do not have access to this repository's `docs/` folder.*
+_A condensed, self-contained summary for use as memory/context in external AI tools (ChatGPT, Gemini, etc.) that do not have access to this repository's `docs/` folder._
 
 > **Source of truth notice**: This file is a **summary**, not the authoritative spec. The real, detailed, versioned documents live in `docs/` (`architecture/Architecture.md`, `database/DATABASE.md`, `api/API_SPEC.md`, `ai/AI_DESIGN.md`, `PROJECT_STRUCTURE.md`, `engineering/ENGINEERING_GUIDE.md`). If this file ever appears to conflict with those, **the `docs/` files win** — flag the discrepancy rather than trusting this summary. Last synced: **2026-07-30**.
 
@@ -18,13 +18,14 @@ Primary personas: an MSME owner with no dedicated bid desk (low digital literacy
 
 **Three independently-deployable services**, no shared runtime process:
 
-| Service | Tech | Role |
-|---|---|---|
-| **Frontend** | React/Next.js | User-facing web app. No business logic. |
-| **Backend API** | Node.js/NestJS | Public REST API (implements `API_SPEC.md`). Owns Users, Organizations, Pipelines, Billing, Audit Log. Orchestrates everything; proxies AI features to the AI Engine. |
-| **AI Engine** | Python/FastAPI | **Internal-only**, never internet-facing. Owns tender extraction, embeddings, match scoring, eligibility checklists, RAG, chatbot, draft generation. Also houses the tender **Ingestion** adapter layer (one connector per source: GeM, CPPP, state portals, private aggregators). |
+| Service         | Tech           | Role                                                                                                                                                                                                                                                                               |
+| --------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Frontend**    | React/Next.js  | User-facing web app. No business logic.                                                                                                                                                                                                                                            |
+| **Backend API** | Node.js/NestJS | Public REST API (implements `API_SPEC.md`). Owns Users, Organizations, Pipelines, Billing, Audit Log. Orchestrates everything; proxies AI features to the AI Engine.                                                                                                               |
+| **AI Engine**   | Python/FastAPI | **Internal-only**, never internet-facing. Owns tender extraction, embeddings, match scoring, eligibility checklists, RAG, chatbot, draft generation. Also houses the tender **Ingestion** adapter layer (one connector per source: GeM, CPPP, state portals, private aggregators). |
 
 **Key architectural rules (locked — do not silently change):**
+
 - AI Engine is called only via the Backend API's `ai-gateway.service.ts`, which enforces AI-credit quota before proxying. No client ever talks to the AI Engine directly.
 - Ingestion and AI extraction are entirely **async/queue-driven** (Redis + BullMQ) — never in a synchronous request path.
 - Every AI-derived fact (extracted field, eligibility status, summary claim) must be traceable to a source document + page/clause. Corrections are versioned (`tender_field_corrections`), never silently overwritten.
@@ -39,20 +40,21 @@ Primary personas: an MSME owner with no dedicated bid desk (low digital literacy
 
 **PostgreSQL 15+ with the `pgvector` extension** is the single online data store (chosen deliberately over a separate vector DB/Elasticsearch for cost efficiency). **33 tables** across 6 domains:
 
-| Domain | Tables |
-|---|---|
-| Identity & Organization | `users`, `user_oauth_identities`, `organizations`, `organization_members`, `organization_invitations`, `msme_profiles`, `msme_certifications` |
+| Domain                      | Tables                                                                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity & Organization     | `users`, `user_oauth_identities`, `organizations`, `organization_members`, `organization_invitations`, `msme_profiles`, `msme_certifications`                   |
 | Tender Taxonomy & Ingestion | `tender_sources`, `tender_categories`, `tenders`, `tender_category_links`, `tender_documents`, `tender_field_corrections`, `ingestion_runs`, `ingestion_errors` |
-| AI & Matching | `tender_embeddings`, `organization_profile_embeddings`, `tender_document_chunks`, `tender_chunk_embeddings`, `match_scores`, `eligibility_checklist_items` |
-| Bid Workspace | `pipeline_items`, `checklist_tasks`, `bid_drafts`, `saved_searches` |
-| Notifications | `notifications`, `notification_preferences` |
-| Billing & Compliance | `subscription_plans`, `organization_subscriptions`, `invoices`, `usage_counters`, `audit_log`, `dsr_requests` |
+| AI & Matching               | `tender_embeddings`, `organization_profile_embeddings`, `tender_document_chunks`, `tender_chunk_embeddings`, `match_scores`, `eligibility_checklist_items`      |
+| Bid Workspace               | `pipeline_items`, `checklist_tasks`, `bid_drafts`, `saved_searches`                                                                                             |
+| Notifications               | `notifications`, `notification_preferences`                                                                                                                     |
+| Billing & Compliance        | `subscription_plans`, `organization_subscriptions`, `invoices`, `usage_counters`, `audit_log`, `dsr_requests`                                                   |
 
 **Conventions:**
+
 - PKs are **app-generated UUIDv7** (time-ordered, non-guessable) — never DB-default v4, never integers.
 - Naming: `snake_case`, plural table names, FK columns `<entity>_id`.
 - **Soft-delete has three categories**: (A) user-owned resources carry `deleted_at` (users, orgs, pipeline items, etc.); (B) system-of-record rows (tenders, documents, embeddings, match scores) have no `deleted_at` — lifecycle is a `status` column, never deleted by users; (C) append-only ledgers (`audit_log`, `dsr_requests`) are never updated/deleted at all; a few tables (notifications, usage_counters) are retention-purged by a scheduled job, not user action.
-- **Ownership boundary**: the AI Engine is the *only* writer of extracted tender fields, embeddings, match scores, and eligibility checklists. The Backend API is read-only on those and only writes user-generated overlay data (bookmarks-as-pipeline-entries, checklist tasks, notes).
+- **Ownership boundary**: the AI Engine is the _only_ writer of extracted tender fields, embeddings, match scores, and eligibility checklists. The Backend API is read-only on those and only writes user-generated overlay data (bookmarks-as-pipeline-entries, checklist tasks, notes).
 - `pgvector` columns use `hnsw`/`ivfflat` indexes; embeddings are 1536-dim (Voyage AI), L2-normalized so cosine similarity = dot product.
 
 ---
@@ -82,21 +84,21 @@ Rule: a new top-level folder always requires a same-PR update to `docs/PROJECT_S
 
 ## 5. Technology Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React + Next.js (App Router, TS), TailwindCSS, React Query, Zustand |
-| Backend API | Node.js + NestJS (TypeScript), TypeORM |
-| AI Engine | Python + FastAPI, SQLAlchemy (async) |
-| Database | PostgreSQL 15+ with `pgvector` |
-| Cache / Queue | Redis + BullMQ |
-| Object Storage | S3-compatible (AWS S3 prod / MinIO local) |
-| LLM | Claude API (Anthropic) — summarization, extraction, RAG, drafting |
-| Embeddings | Voyage AI (1536-dim) |
+| Layer                          | Technology                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------- |
+| Frontend                       | React + Next.js (App Router, TS), TailwindCSS, React Query, Zustand         |
+| Backend API                    | Node.js + NestJS (TypeScript), TypeORM                                      |
+| AI Engine                      | Python + FastAPI, SQLAlchemy (async)                                        |
+| Database                       | PostgreSQL 15+ with `pgvector`                                              |
+| Cache / Queue                  | Redis + BullMQ                                                              |
+| Object Storage                 | S3-compatible (AWS S3 prod / MinIO local)                                   |
+| LLM                            | Claude API (Anthropic) — summarization, extraction, RAG, drafting           |
+| Embeddings                     | Voyage AI (1536-dim)                                                        |
 | Offline vector experimentation | FAISS — **offline/eval only**, never the live serving index (`pgvector` is) |
-| Payments | Razorpay |
-| Containers/Orchestration | Docker; Kubernetes (Kustomize base + staging/production overlays) |
-| CI/CD | GitHub Actions |
-| Observability | OpenTelemetry → Prometheus/Grafana; Loki for logs |
+| Payments                       | Razorpay                                                                    |
+| Containers/Orchestration       | Docker; Kubernetes (Kustomize base + staging/production overlays)           |
+| CI/CD                          | GitHub Actions                                                              |
+| Observability                  | OpenTelemetry → Prometheus/Grafana; Loki for logs                           |
 
 ---
 
@@ -107,13 +109,13 @@ Rule: a new top-level folder always requires a same-PR update to `docs/PROJECT_S
 - **React**: functional components only; Server Components by default, `"use client"` only when truly needed; server data lives only in React Query, never duplicated into global state; accessibility (keyboard operability, semantic HTML) is a hard requirement.
 - **FastAPI**: Pydantic v2 with `extra="forbid"` on every model — "internal-only" is a network boundary, not a trust boundary; every route declares `response_model=`.
 - **SQL**: migrations only, never manual DDL; ORM/repository query path only (raw SQL limited to `pgvector`/full-text search, always parameterized); every FK indexed; no `SELECT *`; cursor pagination for any unbounded query.
-- **Commits**: Conventional Commits (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `security`), imperative subject ≤72 chars, body explains *why* not *what*.
+- **Commits**: Conventional Commits (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `security`), imperative subject ≤72 chars, body explains _why_ not _what_.
 - **Branching**: trunk-based off `main`, short-lived `<type>/<slug>` branches, squash-merge only; no long-lived `develop`/`staging` branches — staging/prod are deployments of tagged commits.
 - **Error handling**: fail-closed on any ambiguous authorization check; no silent catches; only idempotent operations are auto-retried.
 - **Logging**: one shared structured-logging wrapper per language; `correlationId` auto-attached; PII (GST/PAN/tokens) auto-redacted by a maintained deny-list, not call-site discipline.
 - **Security**: tenant isolation enforced via a mandatory base repository class, CI-checked; two-reviewer rule on any auth-path code; least-privilege DB roles per service.
 - **Testing**: unit → integration → a small e2e layer covering only golden paths; mandatory tenant-isolation test suite; AI Engine has a release-gate evaluation suite (no metric regression tolerated) run in CI.
-- **Docs**: any change that would make a `docs/` file inaccurate must update it in the *same PR*. Any change extending the locked architecture requires an ADR in `docs/adr/` *before* implementation.
+- **Docs**: any change that would make a `docs/` file inaccurate must update it in the _same PR_. Any change extending the locked architecture requires an ADR in `docs/adr/` _before_ implementation.
 
 ---
 
@@ -127,14 +129,14 @@ Rule: a new top-level folder always requires a same-PR update to `docs/PROJECT_S
 
 **Endpoint groups** (Swagger tags, one per NestJS module):
 
-| Tag | Key endpoints |
-|---|---|
-| **Auth** | `POST /auth/register`, `/login`, `/oauth/google`, `/refresh`, `/logout`, `GET /auth/me` |
-| **Company** | `/organizations` CRUD, `/organizations/{id}/members`, `/invitations`, `/profile` (MSME profile), `/certifications`, `/subscription`, `/invoices`, `/usage`, `/notifications`, `/notification-preferences` |
-| **Tender** | `GET /tenders` (search/filter/semantic query), `GET /tenders/{id}`, `/tenders/categories`, `/organizations/{id}/saved-searches` (alerts), `/organizations/{id}/pipeline-items` (Kanban), `/pipeline-items/{id}` (stage transitions + approval gate), `/checklist-tasks` |
-| **AI** | `GET /tenders/{id}/summary`, `GET /organizations/{id}/tenders/{id}/eligibility`, `.../match-score`, `POST .../qa` (grounded Q&A), `POST /pipeline-items/{id}/draft-sections`, `POST /organizations/{id}/recompute-matches` — all metered against AI-credit quota |
-| **Reports** | `/organizations/{id}/reports/dashboard`, `/pipeline-funnel`, `/win-loss`, `/export` (CSV/PDF) |
-| **Admin** | `/admin/ingestion/{sources,runs,errors}`, `/admin/ai/extraction-confidence-trend`, `/admin/organizations`, `/admin/dsr-requests`, `/admin/metrics/platform`, `/admin/webhooks/razorpay` |
+| Tag         | Key endpoints                                                                                                                                                                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**    | `POST /auth/register`, `/login`, `/oauth/google`, `/refresh`, `/logout`, `GET /auth/me`                                                                                                                                                                                 |
+| **Company** | `/organizations` CRUD, `/organizations/{id}/members`, `/invitations`, `/profile` (MSME profile), `/certifications`, `/subscription`, `/invoices`, `/usage`, `/notifications`, `/notification-preferences`                                                               |
+| **Tender**  | `GET /tenders` (search/filter/semantic query), `GET /tenders/{id}`, `/tenders/categories`, `/organizations/{id}/saved-searches` (alerts), `/organizations/{id}/pipeline-items` (Kanban), `/pipeline-items/{id}` (stage transitions + approval gate), `/checklist-tasks` |
+| **AI**      | `GET /tenders/{id}/summary`, `GET /organizations/{id}/tenders/{id}/eligibility`, `.../match-score`, `POST .../qa` (grounded Q&A), `POST /pipeline-items/{id}/draft-sections`, `POST /organizations/{id}/recompute-matches` — all metered against AI-credit quota        |
+| **Reports** | `/organizations/{id}/reports/dashboard`, `/pipeline-funnel`, `/win-loss`, `/export` (CSV/PDF)                                                                                                                                                                           |
+| **Admin**   | `/admin/ingestion/{sources,runs,errors}`, `/admin/ai/extraction-confidence-trend`, `/admin/organizations`, `/admin/dsr-requests`, `/admin/metrics/platform`, `/admin/webhooks/razorpay`                                                                                 |
 
 ---
 
@@ -176,7 +178,7 @@ Rule: a new top-level folder always requires a same-PR update to `docs/PROJECT_S
 - WhatsApp-based alerts and conversational Q&A (meets low-digital-literacy users on a familiar channel).
 - Native mobile app (React Native) sharing the same API contract.
 - Dedicated full-text search infra (OpenSearch) once tender volume/query latency crosses a documented threshold — decoupled from the primary transactional DB.
-- Dedicated online vector store (e.g., Qdrant) if `pgvector` is outgrown — the offline FAISS harness is the benchmark used to decide *if/when*, not a pre-commitment.
+- Dedicated online vector store (e.g., Qdrant) if `pgvector` is outgrown — the offline FAISS harness is the benchmark used to decide _if/when_, not a pre-commitment.
 - Multi-language support (Hindi + regional languages) for UI, extraction, and chatbot — data model already language-ready.
 - Marketplace connecting MSMEs with vetted procurement consultants.
 - Fuller AI-assisted bid-document drafting (beyond boilerplate sections) — always retaining mandatory human review, never auto-submission.
@@ -185,3 +187,19 @@ Rule: a new top-level folder always requires a same-PR update to `docs/PROJECT_S
 - Anonymized peer win-rate benchmarking by sector/category.
 - Multi-region deployment if growth or data-residency requirements justify it.
 - Fine-tuned/smaller extraction model to cut per-tender AI cost at scale; active-learning loop feeding human corrections back into evaluation/few-shot sets; table-structure-aware extraction upgrade; streaming/agentic multi-turn retrieval for harder chatbot questions.
+
+**CRITICAL RULE:** The actual repository source code takes precedence over this document if any discrepancy exists.
+
+## Core Philosophy
+
+TenderIQ relies on a strict separation of concerns:
+
+1. **Gemini LLM** is used for semantic extraction and bounded summarization.
+2. **RuleEngine (Deterministic)** is the sole authority for PASS/FAIL matching and eligibility.
+   The system is explicitly designed to be conservative, utilizing anti-hallucination prompts and `[USER INPUT REQUIRED]` placeholders for legal/financial gaps.
+
+## Historical Clarifications
+
+- **Framework:** The frontend is **React/Vite**, _not_ Next.js.
+- **AI:** The provider is **Google Gemini**, _not_ OpenAI or Anthropic.
+- **Vector Store:** Implemented natively in **PostgreSQL via pgvector**, _not_ Pinecone/Milvus.

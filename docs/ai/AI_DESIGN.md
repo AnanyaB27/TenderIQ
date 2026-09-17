@@ -2,20 +2,20 @@
 
 ## Document Control
 
-| Field | Value |
-|---|---|
-| Document | AI_DESIGN.md |
-| Product | TenderIQ — AI Procurement Intelligence Platform for MSMEs |
-| Version | 1.0 (Baseline) |
-| Status | Approved — Authoritative Source of Truth for the AI Engine's internal pipeline |
-| Owner | Chief Software Architect |
-| Last Updated | 2026-07-30 |
-| Owning Service | AI Engine (Python/FastAPI), internal-only — see [Architecture.md](../architecture/Architecture.md) §8, §9.2. Nothing in this document is directly reachable by a client; every capability described here is exposed to end users only through the Backend API endpoints in [API_SPEC.md](../api/API_SPEC.md) §9. |
-| Related Documents | [Architecture.md](../architecture/Architecture.md) · [DATABASE.md](../database/DATABASE.md) · [API_SPEC.md](../api/API_SPEC.md) · [ENGINEERING_GUIDE.md](../engineering/ENGINEERING_GUIDE.md) |
+| Field             | Value                                                                                                                                                                                                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Document          | AI_DESIGN.md                                                                                                                                                                                                                                                                                                     |
+| Product           | TenderIQ — AI Procurement Intelligence Platform for MSMEs                                                                                                                                                                                                                                                        |
+| Version           | 1.0 (Baseline)                                                                                                                                                                                                                                                                                                   |
+| Status            | Approved — Authoritative Source of Truth for the AI Engine's internal pipeline                                                                                                                                                                                                                                   |
+| Owner             | Chief Software Architect                                                                                                                                                                                                                                                                                         |
+| Last Updated      | 2026-07-30                                                                                                                                                                                                                                                                                                       |
+| Owning Service    | AI Engine (Python/FastAPI), internal-only — see [Architecture.md](../architecture/Architecture.md) §8, §9.2. Nothing in this document is directly reachable by a client; every capability described here is exposed to end users only through the Backend API endpoints in [API_SPEC.md](../api/API_SPEC.md) §9. |
+| Related Documents | [Architecture.md](../architecture/Architecture.md) · [DATABASE.md](../database/DATABASE.md) · [API_SPEC.md](../api/API_SPEC.md) · [ENGINEERING_GUIDE.md](../engineering/ENGINEERING_GUIDE.md)                                                                                                                    |
 
 > **Schema note (read before §4/§7):** Two tables referenced by this document — `tender_document_chunks` and `tender_chunk_embeddings` — implement chunk-level retrieval for RAG (§7) and are **not yet present in DATABASE.md v1.0**, which currently only defines a tender-level `tender_embeddings` table. This is an additive gap, not a contradiction: the RAG behavior was already specified in Architecture.md §9.2/§10.3 ("vector search within this tender's document chunks") without the supporting table ever being enumerated. Per this document set's own migration policy (DATABASE.md §12, additive/non-breaking), I am registering both tables as a DATABASE.md addendum in the same change that introduces this document, so the schema stays the single source of truth. See DATABASE.md §7.7 (Addendum) for the finalized column definitions.
 
-> **Vector-store note (read before §5):** Architecture.md §8.1 committed to `pgvector` inside PostgreSQL as the one online vector store, to keep the operational surface minimal at MSME-appropriate cost (NFR-7). FAISS is included in this document per your request, but is scoped to **offline/experimentation use inside the AI Engine** (embedding-model evaluation, clustering for risk-clause peer comparison, §10) rather than as the live serving index — this keeps FAISS's inclusion consistent with the already-locked architecture instead of silently introducing a second production vector store. If you intend FAISS (or another engine) to replace `pgvector` as the *online* store, that is an architecture change and needs your explicit sign-off before I apply it.
+> **Vector-store note (read before §5):** Architecture.md §8.1 committed to `pgvector` inside PostgreSQL as the one online vector store, to keep the operational surface minimal at MSME-appropriate cost (NFR-7). FAISS is included in this document per your request, but is scoped to **offline/experimentation use inside the AI Engine** (embedding-model evaluation, clustering for risk-clause peer comparison, §10) rather than as the live serving index — this keeps FAISS's inclusion consistent with the already-locked architecture instead of silently introducing a second production vector store. If you intend FAISS (or another engine) to replace `pgvector` as the _online_ store, that is an architecture change and needs your explicit sign-off before I apply it.
 
 ---
 
@@ -53,7 +53,7 @@ flowchart TB
 
 **Stages**:
 
-1. **Document classification** — a cheap heuristic pass (characters-per-page vs. page area) decides text-native vs. scanned *before* committing to the more expensive OCR path, so the majority of GeM/CPPP text-native tenders never touch OCR at all.
+1. **Document classification** — a cheap heuristic pass (characters-per-page vs. page area) decides text-native vs. scanned _before_ committing to the more expensive OCR path, so the majority of GeM/CPPP text-native tenders never touch OCR at all.
 2. **Page rasterization** — scanned pages are rendered to images at a fixed target resolution (300 DPI baseline; escalated to 400 DPI on a low-confidence retry) to balance OCR accuracy against processing cost/latency.
 3. **Layout-aware OCR** — the OCR engine preserves bounding boxes and reading order (not just a flat text dump), because tender documents carry meaning in tables (BOQ, eligibility-criteria tables) that a naive top-to-bottom text concatenation would scramble.
 4. **Engine selection** — an open-source OCR engine (Tesseract-class) is the default, consistent with Architecture.md NFR-7 (cost-efficiency, open-source-first); pages that come back below a minimum OCR confidence are retried through a managed cloud OCR fallback before being accepted, rather than accepted at low quality.
@@ -70,6 +70,7 @@ flowchart TB
 **Text-native extraction**: a layout-aware parser (not a flat `pdftotext`-style dump) produces a stream of typed blocks — paragraph, heading, table, list-item — each carrying position metadata (page, bounding box). This typed structure is what makes later clause-level citation (NFR-6) and table-aware chunking (§3) possible.
 
 **Clause/section segmentation**: numbering-pattern detection (`1.`, `1.1`, `Section 3`, `Clause 4(a)`, `(i)`, `(ii)`) builds a hierarchical section tree for the document. This tree is the backbone for:
+
 - Chunk boundaries (§3) that respect clause integrity.
 - The `sourceClauseExcerpt` / `sourcePageNumber` citation fields shown to users (API_SPEC.md §9.1).
 
@@ -89,12 +90,12 @@ flowchart TB
 
 **Sizing**:
 
-| Rule | Value |
-|---|---|
-| Target chunk size | 300–500 tokens |
-| Hard maximum before forced split | 800 tokens |
-| Overlap on forced split (long clause split at a sentence boundary) | ~50 tokens |
-| Table chunks | Kept as a single chunk regardless of the general max — a fragmented BOQ/eligibility table loses meaning when split row-by-row |
+| Rule                                                               | Value                                                                                                                         |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Target chunk size                                                  | 300–500 tokens                                                                                                                |
+| Hard maximum before forced split                                   | 800 tokens                                                                                                                    |
+| Overlap on forced split (long clause split at a sentence boundary) | ~50 tokens                                                                                                                    |
+| Table chunks                                                       | Kept as a single chunk regardless of the general max — a fragmented BOQ/eligibility table loses meaning when split row-by-row |
 
 **Metadata per chunk** (persisted in `tender_document_chunks`, see schema note above): `tenderDocumentId`, `chunkIndex`, `sectionPath` (e.g. `"3 > 3.2 > (a)"`), `pageNumberStart`/`pageNumberEnd`, `tokenCount`, `contentHash`.
 
@@ -108,11 +109,11 @@ flowchart TB
 
 **Two distinct embedding types**, sharing one model family so their vector spaces remain comparable:
 
-| Type | Table | Cardinality | Regenerated When |
-|---|---|---|---|
-| Tender-level embedding | `tender_embeddings` (DATABASE.md §7.3) | 1 per tender | Tender re-extraction or a material field correction |
-| Organization-profile embedding | `organization_profile_embeddings` (DATABASE.md §7.3) | 1 per organization | MSME profile or certification changes |
-| Chunk-level embedding | `tender_chunk_embeddings` (addendum, see schema note above) | 1 per unique chunk (post-dedup, §3) | Once, at ingestion — immutable |
+| Type                           | Table                                                       | Cardinality                         | Regenerated When                                    |
+| ------------------------------ | ----------------------------------------------------------- | ----------------------------------- | --------------------------------------------------- |
+| Tender-level embedding         | `tender_embeddings` (DATABASE.md §7.3)                      | 1 per tender                        | Tender re-extraction or a material field correction |
+| Organization-profile embedding | `organization_profile_embeddings` (DATABASE.md §7.3)        | 1 per organization                  | MSME profile or certification changes               |
+| Chunk-level embedding          | `tender_chunk_embeddings` (addendum, see schema note above) | 1 per unique chunk (post-dedup, §3) | Once, at ingestion — immutable                      |
 
 **Model**: a single embedding model family is used across all three (Voyage AI's retrieval-optimized embedding model, the provider Anthropic recommends alongside the Claude API used for generation — an additive detail Architecture.md left unspecified, not a change to the locked Claude-for-generation decision). Fixed at 1536 dimensions, matching the `vector(1536)` columns already defined in DATABASE.md.
 
@@ -216,15 +217,15 @@ Each task type below has its own template family, each independently versioned: 
 
 A **deterministic rule engine** runs over the categorized, extracted eligibility criteria (§8) and the requesting organization's `msme_profiles` + `msme_certifications` (DATABASE.md §7.1) to produce each `eligibility_checklist_items.status`.
 
-| Criterion Category | Evaluation Logic |
-|---|---|
-| `turnover` | An LLM-assisted sub-extraction parses the clause into `{ thresholdAmount, currency, windowYears, aggregation: avg \| each_year }`; the resulting structured threshold is then compared **deterministically** (plain numeric comparison, no LLM involved at comparison time) against `msme_profiles.annualTurnoverYear1/2/3Amount`. |
-| `certification` | Exact match against `msme_certifications.certificateType` (+ `expiresAt` validity check), with a maintained synonym/alias table for common textual variants (e.g. "ISO 9001:2015" vs. "ISO-9001") as a fuzzy-match fallback before falling back to `needs_verification`. |
-| `experience` | Compares `msme_profiles.yearsInOperation` and/or the organization's own `pipeline_items` history (prior wins in a similar category) against the stated minimum years/similar-project requirement. |
-| `geography` | Matches the tender's `locationState`/`locationCity` (or explicit geographic-restriction text) against `msme_profiles.preferredLocations`. |
-| `technical_capacity` / `other` | Not deterministically evaluable from structured profile data (e.g., "must have executed a similar-scope project") — **always** returned as `needs_verification`, never auto-marked `met`, since a false "met" is a strictly worse failure mode than asking the user to confirm (Risk R-2, R-6). |
+| Criterion Category             | Evaluation Logic                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `turnover`                     | An LLM-assisted sub-extraction parses the clause into `{ thresholdAmount, currency, windowYears, aggregation: avg \| each_year }`; the resulting structured threshold is then compared **deterministically** (plain numeric comparison, no LLM involved at comparison time) against `msme_profiles.annualTurnoverYear1/2/3Amount`. |
+| `certification`                | Exact match against `msme_certifications.certificateType` (+ `expiresAt` validity check), with a maintained synonym/alias table for common textual variants (e.g. "ISO 9001:2015" vs. "ISO-9001") as a fuzzy-match fallback before falling back to `needs_verification`.                                                           |
+| `experience`                   | Compares `msme_profiles.yearsInOperation` and/or the organization's own `pipeline_items` history (prior wins in a similar category) against the stated minimum years/similar-project requirement.                                                                                                                                  |
+| `geography`                    | Matches the tender's `locationState`/`locationCity` (or explicit geographic-restriction text) against `msme_profiles.preferredLocations`.                                                                                                                                                                                          |
+| `technical_capacity` / `other` | Not deterministically evaluable from structured profile data (e.g., "must have executed a similar-scope project") — **always** returned as `needs_verification`, never auto-marked `met`, since a false "met" is a strictly worse failure mode than asking the user to confirm (Risk R-2, R-6).                                    |
 
-**Output**: each item's `status` plus a human-readable reasoning string (e.g., "Your turnover: ₹42,00,000 vs. required: ₹50,00,000") stored alongside the checklist item so a user sees *why*, not just a verdict — never a bare pass/fail with no explanation.
+**Output**: each item's `status` plus a human-readable reasoning string (e.g., "Your turnover: ₹42,00,000 vs. required: ₹50,00,000") stored alongside the checklist item so a user sees _why_, not just a verdict — never a bare pass/fail with no explanation.
 
 **Feed into Match Score**: the fraction of mandatory criteria evaluated `met` feeds `match_scores.ruleBasedScore` directly, and a hard `not_met` on a mandatory criterion caps the overall Match Score at a low ceiling regardless of how semantically similar the tender is — preventing a tender that "reads similar" from scoring artificially high when the organization is plainly ineligible.
 
@@ -249,12 +250,12 @@ A **deterministic rule engine** runs over the categorized, extracted eligibility
 
 Each extracted field carries a confidence value (0.00–1.00), rolled up into `tenders.extractionConfidenceOverall` (DATABASE.md §7.2), computed from four inputs:
 
-| Input | Effect |
-|---|---|
-| Pass 1 / Pass 2 agreement (§8) | Full agreement → high confidence; disagreement → low confidence, both raw values retained via `tender_field_corrections`. |
-| Model's self-reported uncertainty | Required as part of the structured extraction schema (§8); treated as one signal among several, never trusted alone. |
-| OCR confidence ceiling (§1) | A field extracted from a low-OCR-confidence page can never score above that page's OCR confidence, regardless of how confident the LLM sounds — the underlying text itself may be wrong. |
-| Source-format familiarity | A `tenderSourceId` with a strong history of successful extractions contributes a small positive prior; a newly onboarded source contributes a small negative prior until enough volume accrues. |
+| Input                             | Effect                                                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pass 1 / Pass 2 agreement (§8)    | Full agreement → high confidence; disagreement → low confidence, both raw values retained via `tender_field_corrections`.                                                                       |
+| Model's self-reported uncertainty | Required as part of the structured extraction schema (§8); treated as one signal among several, never trusted alone.                                                                            |
+| OCR confidence ceiling (§1)       | A field extracted from a low-OCR-confidence page can never score above that page's OCR confidence, regardless of how confident the LLM sounds — the underlying text itself may be wrong.        |
+| Source-format familiarity         | A `tenderSourceId` with a strong history of successful extractions contributes a small positive prior; a newly onboarded source contributes a small negative prior until enough volume accrues. |
 
 **Thresholds**: fields below a configured cutoff (default 0.6) are surfaced in the UI as "needs verification," never presented with the same visual weight as a confirmed fact, and are prioritized in the ops manual-review queue (US-11).
 
@@ -291,14 +292,14 @@ A layered set of controls, none relied upon alone:
 
 ## 14. Evaluation Metrics
 
-| Metric | What It Measures | Method |
-|---|---|---|
-| Field-level extraction precision/recall/F1 | Extraction accuracy (§8), weighted toward high-impact fields (`submissionDeadlineAt`, eligibility criteria) | Scored against a stratified, human-labeled gold set of tenders spanning all onboarded sources. |
-| Eligibility-status agreement | Compliance Algorithm + extraction correctness combined (§9) | Cohen's kappa between AI-assigned `met`/`not_met`/`needs_verification` and human reviewer judgment on a sampled set. |
-| RAG/chatbot groundedness | Whether an answer follows strictly from its cited chunk (§7, §12, §13) | LLM-as-judge rubric scoring groundedness + citation-precision (fraction of citations that actually support the claim they're attached to), run against a held-out Q&A set of anonymized real questions plus synthetic adversarial questions. |
-| Match Score calibration | Whether the Match Score actually predicts win/loss (§9, FR-BID-3) | Calibration curve: predicted-score bucket vs. observed win rate, tracked over time; recalibration triggers if buckets drift beyond a defined tolerance. |
-| Confidence calibration | Whether stated confidence (§11) matches observed correctness | Reliability diagram — an 80%-confidence field should be correct ~80% of the time; miscalibration triggers threshold retuning. |
-| Operational metrics | Pipeline health (Architecture.md §16) | Extraction latency, OCR-fallback rate, manual-correction rate (US-11), AI-credit cost per tender processed, chatbot refusal rate (tracked as both a safety signal and a coverage-gap signal — a rising refusal rate on legitimate questions points at a retrieval/chunking problem, not just appropriate caution). |
+| Metric                                     | What It Measures                                                                                            | Method                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field-level extraction precision/recall/F1 | Extraction accuracy (§8), weighted toward high-impact fields (`submissionDeadlineAt`, eligibility criteria) | Scored against a stratified, human-labeled gold set of tenders spanning all onboarded sources.                                                                                                                                                                                                                     |
+| Eligibility-status agreement               | Compliance Algorithm + extraction correctness combined (§9)                                                 | Cohen's kappa between AI-assigned `met`/`not_met`/`needs_verification` and human reviewer judgment on a sampled set.                                                                                                                                                                                               |
+| RAG/chatbot groundedness                   | Whether an answer follows strictly from its cited chunk (§7, §12, §13)                                      | LLM-as-judge rubric scoring groundedness + citation-precision (fraction of citations that actually support the claim they're attached to), run against a held-out Q&A set of anonymized real questions plus synthetic adversarial questions.                                                                       |
+| Match Score calibration                    | Whether the Match Score actually predicts win/loss (§9, FR-BID-3)                                           | Calibration curve: predicted-score bucket vs. observed win rate, tracked over time; recalibration triggers if buckets drift beyond a defined tolerance.                                                                                                                                                            |
+| Confidence calibration                     | Whether stated confidence (§11) matches observed correctness                                                | Reliability diagram — an 80%-confidence field should be correct ~80% of the time; miscalibration triggers threshold retuning.                                                                                                                                                                                      |
+| Operational metrics                        | Pipeline health (Architecture.md §16)                                                                       | Extraction latency, OCR-fallback rate, manual-correction rate (US-11), AI-credit cost per tender processed, chatbot refusal rate (tracked as both a safety signal and a coverage-gap signal — a rising refusal rate on legitimate questions points at a retrieval/chunking problem, not just appropriate caution). |
 
 **Release gate**: a new prompt template version or embedding/model version is promoted from staging to production only after it meets or exceeds the current production version on **every** metric above, evaluated against the same fixed eval set — no "average improvement" promotion that tolerates a regression on any individual metric.
 
@@ -313,3 +314,19 @@ A layered set of controls, none relied upon alone:
 - **Table-structure-aware extraction upgrade**: a dedicated table-structure model for complex BOQ tables, reducing reliance on the layout heuristics in §2.
 - **Streaming chatbot responses and iterative/agentic retrieval** (query reformulation, multi-hop retrieval) for harder multi-part questions, once the latency budget (§12) is deliberately relaxed for that use case.
 - **Dedicated online vector store migration path**: if embedding volume or query latency crosses the threshold documented in Architecture.md §18, the offline FAISS harness (§5) is the benchmark tool used to decide — and justify — that migration, rather than a decision made speculatively today.
+
+# AI Design & Pipeline
+
+## The 7-Step Processing Pipeline
+
+1. **Extraction:** Layout-aware parsing via `pypdf`. Detects scanned documents to safely abort.
+2. **Chunking:** Semantic splitting preserving page boundaries and section headings.
+3. **Embedding:** Google Gemini embeddings (`models/text-embedding-004`), 768 dimensions.
+4. **Retrieval:** `pgvector` cosine similarity (`<=>`).
+5. **Extraction (RAG):** Gemini strictly extracts requirements into JSON.
+6. **Matching:** Deterministic Python RuleEngine scores requirements against the MSME profile.
+7. **Confidence:** Deterministic categorization (`HIGH`, `MEDIUM`, `LOW`) based on evidence coverage and system state. _Not a win probability._
+
+## AI-Assisted Drafting
+
+Drafting merges retrieved tender chunks with the verified MSME profile. Gemini is subjected to `temperature=0.1` and explicit instructions to never invent financials, equipment, or compliance status.

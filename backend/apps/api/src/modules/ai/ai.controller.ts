@@ -1,41 +1,15 @@
-import { Controller, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AiGatewayService } from './ai-gateway.service';
+import { Controller, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../../../../../libs/common/guards/jwt-auth.guard';
+import { OrganizationMembershipGuard } from '../../../../../libs/common/guards/organization-membership.guard';
 
-@ApiTags('AI Intelligence')
-@Controller('organizations/:organizationId/tenders/:tenderId')
+/**
+ * P1.12 STABILIZATION:
+ * Obsolete mock evaluation routes have been removed from this controller.
+ * The canonical, end-to-end evaluation flow (PDF -> FastAPI -> pgvector -> Gemini -> Deterministic RuleEngine)
+ * is now exclusively managed by `evaluation.controller.ts` to prevent competing production paths.
+ */
+@UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
+@Controller('organizations/:orgId/ai')
 export class AiController {
-  constructor(private readonly aiGatewayService: AiGatewayService) {}
-
-  @Post('evaluate')
-  @ApiOperation({
-    summary: 'Evaluate organization eligibility and gap analysis for a specific tender',
-  })
-  @ApiParam({ name: 'organizationId', description: 'Organization UUID' })
-  @ApiParam({ name: 'tenderId', description: 'Tender UUID' })
-  @ApiResponse({
-    status: 200,
-    description: 'AI evaluation generated successfully.',
-  })
-  async evaluateTender(
-    @Param('organizationId') organizationId: string,
-    @Param('tenderId') tenderId: string,
-  ) {
-    // You can later wire this up to this.aiGatewayService to run real LLM / semantic evaluations
-    return {
-      tenderId,
-      organizationId,
-      matchScore: 96,
-      eligibilityStatus: 'High Match',
-      summary: 'The organization meets core technical competencies in IoT & embedded systems.',
-      gaps: [
-        'Requires certified proof of prior government project execution exceeding ₹50,00,000.',
-        'Compliance documentation for ISO/IEC 27001 must be attached.'
-      ],
-      recommendations: [
-        'Include your VaultofCodes e-commerce project case study as a modular reference.',
-        'Upload your MSME registration certificate to claim preference points.'
-      ]
-    };
-  }
+  // Reserved for future non-evaluation AI utilities (e.g., generic chatbots, standalone OCR tasks).
 }

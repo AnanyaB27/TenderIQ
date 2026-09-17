@@ -2,16 +2,16 @@
 
 ## Document Control
 
-| Field | Value |
-|---|---|
-| Document | Architecture.md |
-| Product | TenderIQ — AI Procurement Intelligence Platform for MSMEs |
-| Version | 1.0 (Baseline) |
-| Status | Approved — Authoritative Source of Truth |
-| Owner | Chief Software Architect |
-| Last Updated | 2026-07-30 |
-| Change Policy | This architecture MUST NOT be altered without explicit authorization. All future documents (database, API, AI pipeline, engineering standards) must remain consistent with this document. |
-| Related Documents | [DATABASE.md](../database/DATABASE.md) · [API_SPEC.md](../api/API_SPEC.md) · [AI_DESIGN.md](../ai/AI_DESIGN.md) · [ENGINEERING_GUIDE.md](../engineering/ENGINEERING_GUIDE.md) |
+| Field             | Value                                                                                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Document          | Architecture.md                                                                                                                                                                           |
+| Product           | TenderIQ — AI Procurement Intelligence Platform for MSMEs                                                                                                                                 |
+| Version           | 1.0 (Baseline)                                                                                                                                                                            |
+| Status            | Approved — Authoritative Source of Truth                                                                                                                                                  |
+| Owner             | Chief Software Architect                                                                                                                                                                  |
+| Last Updated      | 2026-07-30                                                                                                                                                                                |
+| Change Policy     | This architecture MUST NOT be altered without explicit authorization. All future documents (database, API, AI pipeline, engineering standards) must remain consistent with this document. |
+| Related Documents | [DATABASE.md](../database/DATABASE.md) · [API_SPEC.md](../api/API_SPEC.md) · [AI_DESIGN.md](../ai/AI_DESIGN.md) · [ENGINEERING_GUIDE.md](../engineering/ENGINEERING_GUIDE.md)             |
 
 ---
 
@@ -36,124 +36,129 @@ Requirements are grouped by module and numbered `FR-<MODULE>-<N>` for traceabili
 
 ### 2.1 Identity, Organizations & Access (IAM)
 
-| ID | Requirement |
-|---|---|
-| FR-IAM-1 | Users register and authenticate via email/password or OAuth (Google). |
-| FR-IAM-2 | A user belongs to one or more **Organizations** (an MSME's tenant workspace). |
-| FR-IAM-3 | Organizations support role-based membership: `Owner`, `Bid Manager`, `Viewer`. |
-| FR-IAM-4 | Organization Owners can invite, remove, and change the role of members. |
+| ID       | Requirement                                                                                                                                                                                                                                                                                                  |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-IAM-1 | Users register and authenticate via email/password or OAuth (Google).                                                                                                                                                                                                                                        |
+| FR-IAM-2 | A user belongs to one or more **Organizations** (an MSME's tenant workspace).                                                                                                                                                                                                                                |
+| FR-IAM-3 | Organizations support role-based membership: `Owner`, `Bid Manager`, `Viewer`.                                                                                                                                                                                                                               |
+| FR-IAM-4 | Organization Owners can invite, remove, and change the role of members.                                                                                                                                                                                                                                      |
 | FR-IAM-5 | Every organization maintains an **MSME Profile**: industry sector(s), NIC/NIC codes, Udyam registration, GST number, PAN, annual turnover bands (last 3 years), years in operation, certifications (ISO, MSE, startup recognition), past experience/work completed, empanelments, and preferred geographies. |
-| FR-IAM-6 | Session management via short-lived access tokens + rotating refresh tokens; sessions are revocable per-device. |
+| FR-IAM-6 | Session management via short-lived access tokens + rotating refresh tokens; sessions are revocable per-device.                                                                                                                                                                                               |
 
 ### 2.2 Tender Ingestion & Normalization
 
-| ID | Requirement |
-|---|---|
-| FR-ING-1 | The system continuously ingests tenders from configured sources (GeM, CPPP, state e-procurement portals, PSU portals, private aggregators) via scheduled scrapers/connectors. |
-| FR-ING-2 | Each ingested tender is deduplicated against existing records using a source-id + fuzzy content hash strategy. |
-| FR-ING-3 | Raw tender documents (PDF, DOC, HTML) are stored immutably in object storage and linked to the tender record. |
+| ID       | Requirement                                                                                                                                                                                                                            |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-ING-1 | The system continuously ingests tenders from configured sources (GeM, CPPP, state e-procurement portals, PSU portals, private aggregators) via scheduled scrapers/connectors.                                                          |
+| FR-ING-2 | Each ingested tender is deduplicated against existing records using a source-id + fuzzy content hash strategy.                                                                                                                         |
+| FR-ING-3 | Raw tender documents (PDF, DOC, HTML) are stored immutably in object storage and linked to the tender record.                                                                                                                          |
 | FR-ING-4 | The AI Engine extracts structured fields from raw documents: tender title, issuing authority, tender value, EMD amount, submission deadline, opening date, eligibility criteria, required documents, category/NIC codes, and location. |
-| FR-ING-5 | Ingestion failures (unparseable documents, source downtime) are logged and retried with backoff, and surfaced on an internal ingestion-health dashboard. |
-| FR-ING-6 | Ingested tenders pass through a normalization pipeline that maps source-specific categories to TenderIQ's canonical taxonomy. |
+| FR-ING-5 | Ingestion failures (unparseable documents, source downtime) are logged and retried with backoff, and surfaced on an internal ingestion-health dashboard.                                                                               |
+| FR-ING-6 | Ingested tenders pass through a normalization pipeline that maps source-specific categories to TenderIQ's canonical taxonomy.                                                                                                          |
 
 ### 2.3 AI Matching & Scoring
 
-| ID | Requirement |
-|---|---|
-| FR-AI-1 | Each tender is embedded (vector representation) and semantically indexed for similarity search. |
+| ID      | Requirement                                                                                                                                                                                                    |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-AI-1 | Each tender is embedded (vector representation) and semantically indexed for similarity search.                                                                                                                |
 | FR-AI-2 | For every active organization, the system computes a **Match Score (0–100)** per relevant tender based on sector fit, turnover eligibility, certification requirements, geography, and historical win pattern. |
-| FR-AI-3 | The system computes an **Eligibility Checklist** per tender per organization, marking each stated eligibility criterion as Met / Not Met / Needs Verification, with the source clause quoted. |
-| FR-AI-4 | The system generates a plain-language **AI Summary** of every tender (scope, key dates, value, top 3 risks/requirements). |
-| FR-AI-5 | Users can ask natural-language questions about a specific tender ("Do I need ISO certification for this?") and receive answers grounded in the tender document (RAG). |
-| FR-AI-6 | The system flags tenders with abnormally restrictive or non-standard clauses ("tailored tender" detection) that may indicate low win probability for new bidders. |
+| FR-AI-3 | The system computes an **Eligibility Checklist** per tender per organization, marking each stated eligibility criterion as Met / Not Met / Needs Verification, with the source clause quoted.                  |
+| FR-AI-4 | The system generates a plain-language **AI Summary** of every tender (scope, key dates, value, top 3 risks/requirements).                                                                                      |
+| FR-AI-5 | Users can ask natural-language questions about a specific tender ("Do I need ISO certification for this?") and receive answers grounded in the tender document (RAG).                                          |
+| FR-AI-6 | The system flags tenders with abnormally restrictive or non-standard clauses ("tailored tender" detection) that may indicate low win probability for new bidders.                                              |
 
 ### 2.4 Discovery, Search & Alerts
 
-| ID | Requirement |
-|---|---|
-| FR-DIS-1 | Users can search tenders by keyword, category, location, value range, and deadline window, combining full-text and semantic search. |
-| FR-DIS-2 | Users can filter to "Recommended for you" (Match Score ≥ configurable threshold). |
+| ID       | Requirement                                                                                                                                   |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-DIS-1 | Users can search tenders by keyword, category, location, value range, and deadline window, combining full-text and semantic search.           |
+| FR-DIS-2 | Users can filter to "Recommended for you" (Match Score ≥ configurable threshold).                                                             |
 | FR-DIS-3 | Users can save search filters as persistent **Alerts**; new matching tenders trigger a notification (email, in-app, WhatsApp — future scope). |
-| FR-DIS-4 | Users can bookmark/shortlist tenders into personal or organization-wide **Pipelines** (Watching, Preparing, Submitted, Won, Lost). |
+| FR-DIS-4 | Users can bookmark/shortlist tenders into personal or organization-wide **Pipelines** (Watching, Preparing, Submitted, Won, Lost).            |
 
 ### 2.5 Bid Preparation Workspace
 
-| ID | Requirement |
-|---|---|
-| FR-BID-1 | For a shortlisted tender, users get an auto-generated **Document Checklist** (from FR-AI-3) they can assign to team members and mark complete. |
+| ID       | Requirement                                                                                                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-BID-1 | For a shortlisted tender, users get an auto-generated **Document Checklist** (from FR-AI-3) they can assign to team members and mark complete.                                             |
 | FR-BID-2 | The AI Engine can draft boilerplate response sections (company profile, technical capability statement) pre-filled from the MSME Profile, for user review and edit — never auto-submitted. |
-| FR-BID-3 | Users can log the outcome of a bid (Submitted, Won, Lost, Disqualified) with notes; this feeds back into match-score calibration (FR-AI-2). |
-| FR-BID-4 | Deadline reminders are sent at configurable intervals (7 days, 3 days, 1 day, submission day). |
+| FR-BID-3 | Users can log the outcome of a bid (Submitted, Won, Lost, Disqualified) with notes; this feeds back into match-score calibration (FR-AI-2).                                                |
+| FR-BID-4 | Deadline reminders are sent at configurable intervals (7 days, 3 days, 1 day, submission day).                                                                                             |
 
 ### 2.6 Analytics & Reporting
 
-| ID | Requirement |
-|---|---|
-| FR-ANL-1 | Organization dashboard shows: tenders tracked, win rate, upcoming deadlines, pipeline funnel, and value of tenders won vs. bid. |
+| ID       | Requirement                                                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-ANL-1 | Organization dashboard shows: tenders tracked, win rate, upcoming deadlines, pipeline funnel, and value of tenders won vs. bid.            |
 | FR-ANL-2 | Platform admins have an operational dashboard: ingestion volume/health, AI processing latency, active organizations, subscription metrics. |
 
 ### 2.7 Subscription & Billing
 
-| ID | Requirement |
-|---|---|
+| ID       | Requirement                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FR-SUB-1 | The platform offers tiered plans (Free, Starter, Growth, Enterprise) gating tender-alert volume, AI-credit usage (summaries, Q&A, draft generation), and number of seats. |
-| FR-SUB-2 | Billing integrates with a third-party payment gateway (Razorpay) supporting Indian payment methods; invoices are generated per billing cycle. |
-| FR-SUB-3 | Usage against AI credits and alert quotas is metered in near-real-time and enforced at the API layer. |
+| FR-SUB-2 | Billing integrates with a third-party payment gateway (Razorpay) supporting Indian payment methods; invoices are generated per billing cycle.                             |
+| FR-SUB-3 | Usage against AI credits and alert quotas is metered in near-real-time and enforced at the API layer.                                                                     |
 
 ### 2.8 Notifications
 
-| ID | Requirement |
-|---|---|
-| FR-NOT-1 | Notifications are delivered via in-app feed and email at minimum, with channel preference per user. |
+| ID       | Requirement                                                                                                                                                                              |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-NOT-1 | Notifications are delivered via in-app feed and email at minimum, with channel preference per user.                                                                                      |
 | FR-NOT-2 | All notification-worthy events (new match, deadline approaching, checklist item overdue, teammate action) are emitted as domain events and routed through a single notification service. |
 
 ---
 
 ## 3. Non-Functional Requirements
 
-| ID | Category | Requirement |
-|---|---|---|
-| NFR-1 | Availability | Core read paths (search, browse, dashboard) target **99.5%** monthly uptime; ingestion/AI pipelines target **99%** (best-effort, non-blocking of reads). |
-| NFR-2 | Performance | API p95 latency ≤ 300ms for CRUD/search endpoints (excluding AI-generation endpoints); AI summary generation ≤ 8s p95; tender search ≤ 500ms p95 at 100k active tenders. |
-| NFR-3 | Scalability | System scales horizontally to 50,000 organizations and 2M ingested tenders without architectural change; stateless services scale independently per load. |
-| NFR-4 | Security | All data encrypted in transit (TLS 1.2+) and at rest (AES-256); PII (GST, PAN, contact info) access is role-gated and audit-logged. |
-| NFR-5 | Multi-tenancy | Strict logical tenant isolation — no organization can access another organization's data under any code path; enforced at the data-access layer, not only application logic. |
-| NFR-6 | Data Integrity | AI-extracted fields are always traceable to source document + page/clause; corrections are versioned, never silently overwritten. |
-| NFR-7 | Cost Efficiency | Infrastructure choices favor pay-as-you-scale, open-source-first components appropriate to an MSME-priced product; no per-seat enterprise-only dependencies in the core path. |
-| NFR-8 | Maintainability | Services follow one coding standard (ENGINEERING_GUIDE.md); each service is independently deployable and independently testable. |
-| NFR-9 | Observability | Every request is traceable end-to-end via correlation ID across API, AI Engine, and async workers. |
-| NFR-10 | Portability | The system is cloud-portable: containerized services with no hard dependency on a single cloud vendor's proprietary managed service where a portable equivalent exists. |
-| NFR-11 | Compliance | Handling of GST/PAN/financial data aligns with India's DPDP Act, 2023 obligations (consent, purpose limitation, breach notification readiness). |
-| NFR-12 | Localization Readiness | Data model and frontend are structured to support multi-language (English + regional languages) without schema rework (Future Scope, Section 18). |
+| ID     | Category               | Requirement                                                                                                                                                                   |
+| ------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-1  | Availability           | Core read paths (search, browse, dashboard) target **99.5%** monthly uptime; ingestion/AI pipelines target **99%** (best-effort, non-blocking of reads).                      |
+| NFR-2  | Performance            | API p95 latency ≤ 300ms for CRUD/search endpoints (excluding AI-generation endpoints); AI summary generation ≤ 8s p95; tender search ≤ 500ms p95 at 100k active tenders.      |
+| NFR-3  | Scalability            | System scales horizontally to 50,000 organizations and 2M ingested tenders without architectural change; stateless services scale independently per load.                     |
+| NFR-4  | Security               | All data encrypted in transit (TLS 1.2+) and at rest (AES-256); PII (GST, PAN, contact info) access is role-gated and audit-logged.                                           |
+| NFR-5  | Multi-tenancy          | Strict logical tenant isolation — no organization can access another organization's data under any code path; enforced at the data-access layer, not only application logic.  |
+| NFR-6  | Data Integrity         | AI-extracted fields are always traceable to source document + page/clause; corrections are versioned, never silently overwritten.                                             |
+| NFR-7  | Cost Efficiency        | Infrastructure choices favor pay-as-you-scale, open-source-first components appropriate to an MSME-priced product; no per-seat enterprise-only dependencies in the core path. |
+| NFR-8  | Maintainability        | Services follow one coding standard (ENGINEERING_GUIDE.md); each service is independently deployable and independently testable.                                              |
+| NFR-9  | Observability          | Every request is traceable end-to-end via correlation ID across API, AI Engine, and async workers.                                                                            |
+| NFR-10 | Portability            | The system is cloud-portable: containerized services with no hard dependency on a single cloud vendor's proprietary managed service where a portable equivalent exists.       |
+| NFR-11 | Compliance             | Handling of GST/PAN/financial data aligns with India's DPDP Act, 2023 obligations (consent, purpose limitation, breach notification readiness).                               |
+| NFR-12 | Localization Readiness | Data model and frontend are structured to support multi-language (English + regional languages) without schema rework (Future Scope, Section 18).                             |
 
 ---
 
 ## 4. User Personas
 
 ### Persona 1 — Priya, MSME Owner (Primary)
+
 - Runs a 25-person manufacturing/services business. Wears multiple hats; procurement is 10% of her time.
 - Goal: find tenders she's actually eligible for without reading 40-page PDFs.
 - Pain: misses deadlines buried in long documents; has been disqualified before for missing a document she didn't know was required.
 - Technical comfort: low-to-medium; uses WhatsApp and mobile browser heavily.
 
 ### Persona 2 — Rahul, Dedicated Bid Manager
+
 - Employed by a larger MSME (80–150 employees) specifically to track and respond to tenders.
 - Goal: maximize submission volume and win rate; needs a pipeline view and team task assignment.
 - Pain: juggles multiple portals and spreadsheets; no single source of truth on bid status.
 - Technical comfort: medium-high; power user of filters, alerts, and exports.
 
 ### Persona 3 — Anita, Procurement Consultant
+
 - External consultant serving multiple MSME clients.
 - Goal: manage several organizations' pipelines from one login; demonstrate ROI to clients.
 - Pain: context-switching between client accounts; needs client-specific eligibility profiles kept separate.
 - Technical comfort: high.
 
 ### Persona 4 — Platform Operations Admin (Internal)
+
 - TenderIQ's internal ops/support engineer.
 - Goal: monitor ingestion health, AI pipeline accuracy, subscription metrics; triage failed ingestions and user-reported errors.
 - Technical comfort: high (internal tooling user).
 
 ### Persona 5 — Vikram, Enterprise Compliance Officer (Enterprise tier)
+
 - At larger MSME/small-enterprise clients, responsible for ensuring only compliant bids go out.
 - Goal: approval workflows, audit trail of who changed what before submission.
 - Pain: needs assurance no bid is submitted without sign-off.
@@ -165,39 +170,39 @@ Requirements are grouped by module and numbered `FR-<MODULE>-<N>` for traceabili
 
 ### 5.1 Priya (MSME Owner)
 
-| ID | Story | Acceptance Criteria |
-|---|---|---|
-| US-1 | As Priya, I want to see only tenders relevant to my business so I don't waste time screening irrelevant ones. | Dashboard default view is filtered to Match Score ≥ 60; score and top match reasons are visible on each card. |
-| US-2 | As Priya, I want a plain-language summary of a tender before opening the full PDF. | Every tender detail page shows an AI Summary above the raw document viewer, generated within 8s of first request. |
-| US-3 | As Priya, I want to know if I'm missing any eligibility requirement before I invest time preparing a bid. | Eligibility Checklist shows Met/Not Met/Needs Verification with the exact clause quoted for each item. |
-| US-4 | As Priya, I want to be reminded before deadlines so I never miss one again. | Reminders fire at 7/3/1 days and on submission day via email + in-app, configurable per organization. |
+| ID   | Story                                                                                                         | Acceptance Criteria                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| US-1 | As Priya, I want to see only tenders relevant to my business so I don't waste time screening irrelevant ones. | Dashboard default view is filtered to Match Score ≥ 60; score and top match reasons are visible on each card.     |
+| US-2 | As Priya, I want a plain-language summary of a tender before opening the full PDF.                            | Every tender detail page shows an AI Summary above the raw document viewer, generated within 8s of first request. |
+| US-3 | As Priya, I want to know if I'm missing any eligibility requirement before I invest time preparing a bid.     | Eligibility Checklist shows Met/Not Met/Needs Verification with the exact clause quoted for each item.            |
+| US-4 | As Priya, I want to be reminded before deadlines so I never miss one again.                                   | Reminders fire at 7/3/1 days and on submission day via email + in-app, configurable per organization.             |
 
 ### 5.2 Rahul (Bid Manager)
 
-| ID | Story | Acceptance Criteria |
-|---|---|---|
-| US-5 | As Rahul, I want a pipeline board of all tenders my team is tracking. | Kanban view with stages Watching → Preparing → Submitted → Won/Lost; drag-and-drop updates status and logs an audit event. |
-| US-6 | As Rahul, I want to assign checklist items to teammates. | Checklist items support assignee + due date; assignee receives a notification. |
-| US-7 | As Rahul, I want to export my pipeline and win/loss history for management reporting. | CSV/PDF export of pipeline and analytics available from the dashboard. |
+| ID   | Story                                                                                 | Acceptance Criteria                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| US-5 | As Rahul, I want a pipeline board of all tenders my team is tracking.                 | Kanban view with stages Watching → Preparing → Submitted → Won/Lost; drag-and-drop updates status and logs an audit event. |
+| US-6 | As Rahul, I want to assign checklist items to teammates.                              | Checklist items support assignee + due date; assignee receives a notification.                                             |
+| US-7 | As Rahul, I want to export my pipeline and win/loss history for management reporting. | CSV/PDF export of pipeline and analytics available from the dashboard.                                                     |
 
 ### 5.3 Anita (Consultant)
 
-| ID | Story | Acceptance Criteria |
-|---|---|---|
-| US-8 | As Anita, I want to switch between client organizations from one account. | Organization switcher in the top nav; all data scoped strictly to the active organization. |
-| US-9 | As Anita, I want each client's eligibility profile kept private from other clients. | No cross-organization data leakage verified by tenant-isolation test suite (NFR-5). |
+| ID   | Story                                                                               | Acceptance Criteria                                                                        |
+| ---- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| US-8 | As Anita, I want to switch between client organizations from one account.           | Organization switcher in the top nav; all data scoped strictly to the active organization. |
+| US-9 | As Anita, I want each client's eligibility profile kept private from other clients. | No cross-organization data leakage verified by tenant-isolation test suite (NFR-5).        |
 
 ### 5.4 Ops Admin
 
-| ID | Story | Acceptance Criteria |
-|---|---|---|
+| ID    | Story                                                                                               | Acceptance Criteria                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | US-10 | As an Ops Admin, I want to see which ingestion sources are failing so I can fix connectors quickly. | Ingestion Health dashboard shows per-source success rate, last successful run, and error samples over the last 24h. |
-| US-11 | As an Ops Admin, I want to see AI extraction confidence trends to catch model drift. | Dashboard tracks % of tenders requiring manual field correction, trended weekly. |
+| US-11 | As an Ops Admin, I want to see AI extraction confidence trends to catch model drift.                | Dashboard tracks % of tenders requiring manual field correction, trended weekly.                                    |
 
 ### 5.5 Vikram (Compliance Officer)
 
-| ID | Story | Acceptance Criteria |
-|---|---|---|
+| ID    | Story                                                                   | Acceptance Criteria                                                                                                                                            |
+| ----- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | US-12 | As Vikram, I want to require approval before a bid is marked Submitted. | Enterprise-tier organizations can enable an approval gate; status change to Submitted requires an Owner/designated approver action, logged in the audit trail. |
 
 ---
@@ -345,29 +350,29 @@ flowchart TB
 
 ### 8.1 Technology Stack
 
-| Layer | Technology | Rationale |
-|---|---|---|
-| Frontend | React + Next.js (TypeScript), TailwindCSS | SSR for fast first paint on tender listing pages, strong ecosystem, SEO-friendly for public tender pages. |
-| Backend API | Node.js + NestJS (TypeScript) | Structured, modular, testable; shared TypeScript types with frontend; strong fit for I/O-bound orchestration. |
-| AI Engine | Python + FastAPI | Native fit for NLP/ML tooling, document parsing, embeddings, LLM orchestration. |
-| Primary Database | PostgreSQL + `pgvector` extension | Single relational store handling both transactional data and vector similarity search — avoids operating a separate vector database at MSME-appropriate cost/scale (NFR-7). |
-| Full-Text Search | PostgreSQL native full-text search (initial); OpenSearch (future scope at scale) | Keeps operational surface minimal at launch; documented upgrade path in Section 18. |
-| Cache / Queue | Redis (+ BullMQ for job queues) | Single technology serving caching, session storage, rate-limit counters, and async job queues. |
-| Object Storage | S3-compatible storage (AWS S3 in prod, MinIO in local/dev) | Portable interface (NFR-10); stores raw tender documents immutably. |
-| LLM Provider | Claude API (Anthropic) | Summarization, structured extraction, RAG Q&A, draft generation — see AI_DESIGN.md. |
-| Containerization | Docker; Docker Compose (dev), Kubernetes (staging/prod) | Consistent environments across dev/CI/prod (NFR-10). |
-| CI/CD | GitHub Actions | Test, lint, build, containerize, deploy pipeline per service. |
-| Observability | OpenTelemetry, Prometheus, Grafana, centralized log aggregation (Loki) | See Sections 15–16. |
+| Layer            | Technology                                                                       | Rationale                                                                                                                                                                   |
+| ---------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend         | React + Next.js (TypeScript), TailwindCSS                                        | SSR for fast first paint on tender listing pages, strong ecosystem, SEO-friendly for public tender pages.                                                                   |
+| Backend API      | Node.js + NestJS (TypeScript)                                                    | Structured, modular, testable; shared TypeScript types with frontend; strong fit for I/O-bound orchestration.                                                               |
+| AI Engine        | Python + FastAPI                                                                 | Native fit for NLP/ML tooling, document parsing, embeddings, LLM orchestration.                                                                                             |
+| Primary Database | PostgreSQL + `pgvector` extension                                                | Single relational store handling both transactional data and vector similarity search — avoids operating a separate vector database at MSME-appropriate cost/scale (NFR-7). |
+| Full-Text Search | PostgreSQL native full-text search (initial); OpenSearch (future scope at scale) | Keeps operational surface minimal at launch; documented upgrade path in Section 18.                                                                                         |
+| Cache / Queue    | Redis (+ BullMQ for job queues)                                                  | Single technology serving caching, session storage, rate-limit counters, and async job queues.                                                                              |
+| Object Storage   | S3-compatible storage (AWS S3 in prod, MinIO in local/dev)                       | Portable interface (NFR-10); stores raw tender documents immutably.                                                                                                         |
+| LLM Provider     | Claude API (Anthropic)                                                           | Summarization, structured extraction, RAG Q&A, draft generation — see AI_DESIGN.md.                                                                                         |
+| Containerization | Docker; Docker Compose (dev), Kubernetes (staging/prod)                          | Consistent environments across dev/CI/prod (NFR-10).                                                                                                                        |
+| CI/CD            | GitHub Actions                                                                   | Test, lint, build, containerize, deploy pipeline per service.                                                                                                               |
+| Observability    | OpenTelemetry, Prometheus, Grafana, centralized log aggregation (Loki)           | See Sections 15–16.                                                                                                                                                         |
 
 ### 8.2 Service Responsibilities
 
-| Service | Responsibility | Owns Data |
-|---|---|---|
-| **Frontend Web App** | Renders all user-facing UI; no business logic beyond presentation/validation. | None (stateless) |
-| **Backend API Service** | Auth, organizations, tender CRUD/search orchestration, pipeline/checklist, alerts, billing, audit logging. Single point of truth for API contract (API_SPEC.md). | Users, Organizations, Memberships, Pipelines, Checklists, Alerts, Subscriptions, Audit Log |
-| **AI Engine Service** | Document parsing (OCR where needed), field extraction, embeddings generation, match scoring, eligibility checklist generation, AI summaries, RAG Q&A, draft generation. Internal service, not exposed to the public internet. | Tenders (structured), Extraction metadata, Embeddings, Match Scores |
-| **Ingestion Service** | Scheduled/queued scraping and polling of external tender sources; deduplication; raw document storage; triggers AI Engine extraction. | Raw source records, ingestion run logs |
-| **Notification Service** | Consumes domain events, renders and dispatches notifications across channels. | Notification delivery log |
+| Service                  | Responsibility                                                                                                                                                                                                                | Owns Data                                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Frontend Web App**     | Renders all user-facing UI; no business logic beyond presentation/validation.                                                                                                                                                 | None (stateless)                                                                           |
+| **Backend API Service**  | Auth, organizations, tender CRUD/search orchestration, pipeline/checklist, alerts, billing, audit logging. Single point of truth for API contract (API_SPEC.md).                                                              | Users, Organizations, Memberships, Pipelines, Checklists, Alerts, Subscriptions, Audit Log |
+| **AI Engine Service**    | Document parsing (OCR where needed), field extraction, embeddings generation, match scoring, eligibility checklist generation, AI summaries, RAG Q&A, draft generation. Internal service, not exposed to the public internet. | Tenders (structured), Extraction metadata, Embeddings, Match Scores                        |
+| **Ingestion Service**    | Scheduled/queued scraping and polling of external tender sources; deduplication; raw document storage; triggers AI Engine extraction.                                                                                         | Raw source records, ingestion run logs                                                     |
+| **Notification Service** | Consumes domain events, renders and dispatches notifications across channels.                                                                                                                                                 | Notification delivery log                                                                  |
 
 ### 8.3 Design Principles
 
@@ -406,13 +411,13 @@ flowchart TB
 
 Internal-only, not exposed publicly; secured via a shared service-to-service token and restricted network policy (Section 13).
 
-| Endpoint | Purpose |
-|---|---|
-| `POST /internal/tenders/{id}/extract` | Trigger/re-trigger structured extraction for a tender. |
-| `GET /internal/tenders/{id}/summary` | Retrieve (or generate + cache) AI summary. |
-| `POST /internal/tenders/{id}/qa` | RAG question answering scoped to one tender. |
-| `POST /internal/orgs/{id}/match` | Compute/refresh match scores for an organization against active tenders. |
-| `POST /internal/tenders/{id}/draft` | Generate a draft response section given org profile + tender context. |
+| Endpoint                              | Purpose                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| `POST /internal/tenders/{id}/extract` | Trigger/re-trigger structured extraction for a tender.                   |
+| `GET /internal/tenders/{id}/summary`  | Retrieve (or generate + cache) AI summary.                               |
+| `POST /internal/tenders/{id}/qa`      | RAG question answering scoped to one tender.                             |
+| `POST /internal/orgs/{id}/match`      | Compute/refresh match scores for an organization against active tenders. |
+| `POST /internal/tenders/{id}/draft`   | Generate a draft response section given org profile + tender context.    |
 
 ### 9.4 Key Invariants
 
@@ -766,17 +771,17 @@ flowchart TB
 
 ## 14. Scalability Strategy
 
-| Dimension | Strategy |
-|---|---|
-| **Compute (Frontend/Backend/AI Engine)** | All application services are stateless and horizontally autoscaled (Kubernetes HPA) on CPU/queue-depth signals. |
-| **Database reads** | PostgreSQL read replica(s) for search/dashboard read traffic; writes remain on primary. |
-| **Database growth** | Tender and embedding tables partitioned by ingestion date once volume warrants (documented threshold: >5M tender rows); connection pooling via PgBouncer. |
-| **Caching** | Redis caches hot search results, tender detail pages, and computed match scores with short TTLs; cache invalidated on re-extraction/re-scoring. |
-| **Async processing** | Ingestion and AI extraction are entirely queue-driven (Redis/BullMQ); queue depth is a first-class autoscaling signal for AI Engine and Ingestion worker pods. |
-| **AI cost/throughput** | LLM calls are batched where possible (bulk extraction), response-cached per tender, and truncated/chunked for large documents to control both latency and cost. |
-| **Search at scale** | Postgres FTS + pgvector is the default; documented migration path to OpenSearch/dedicated vector store is defined once tender volume or query latency crosses the NFR-2 threshold (Section 18). |
-| **Static assets** | CDN-fronted for the frontend build and any public tender-summary pages. |
-| **Multi-region** | Not required at MSME-launch scale; architecture does not preclude it — stateless compute + managed data services support a future multi-region read path (Section 18). |
+| Dimension                                | Strategy                                                                                                                                                                                        |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Compute (Frontend/Backend/AI Engine)** | All application services are stateless and horizontally autoscaled (Kubernetes HPA) on CPU/queue-depth signals.                                                                                 |
+| **Database reads**                       | PostgreSQL read replica(s) for search/dashboard read traffic; writes remain on primary.                                                                                                         |
+| **Database growth**                      | Tender and embedding tables partitioned by ingestion date once volume warrants (documented threshold: >5M tender rows); connection pooling via PgBouncer.                                       |
+| **Caching**                              | Redis caches hot search results, tender detail pages, and computed match scores with short TTLs; cache invalidated on re-extraction/re-scoring.                                                 |
+| **Async processing**                     | Ingestion and AI extraction are entirely queue-driven (Redis/BullMQ); queue depth is a first-class autoscaling signal for AI Engine and Ingestion worker pods.                                  |
+| **AI cost/throughput**                   | LLM calls are batched where possible (bulk extraction), response-cached per tender, and truncated/chunked for large documents to control both latency and cost.                                 |
+| **Search at scale**                      | Postgres FTS + pgvector is the default; documented migration path to OpenSearch/dedicated vector store is defined once tender volume or query latency crosses the NFR-2 threshold (Section 18). |
+| **Static assets**                        | CDN-fronted for the frontend build and any public tender-summary pages.                                                                                                                         |
+| **Multi-region**                         | Not required at MSME-launch scale; architecture does not preclude it — stateless compute + managed data services support a future multi-region read path (Section 18).                          |
 
 ---
 
@@ -797,7 +802,7 @@ flowchart TB
 - **Metrics**: exposed via OpenTelemetry → Prometheus. Key metrics per service: request rate, error rate, latency histograms (RED method); queue depth and processing lag for async workers; LLM call latency/cost/token-usage for the AI Engine.
 - **Dashboards**: Grafana dashboards per service plus a platform-level dashboard covering the NFR-2 latency targets, ingestion source health (US-10), and AI extraction confidence trend (US-11).
 - **Tracing**: OpenTelemetry distributed tracing across Backend API → AI Engine → data stores, keyed by `correlation_id`, for root-causing latency and errors across service boundaries.
-- **SLOs**: 
+- **SLOs**:
   - API availability ≥ 99.5% monthly (NFR-1) → alert if 5-minute error rate > 2%.
   - Search p95 latency ≤ 500ms → alert on sustained breach over 10 minutes.
   - Ingestion pipeline: alert if any configured source has zero successful runs in 24h.
@@ -807,17 +812,17 @@ flowchart TB
 
 ## 17. Risks
 
-| ID | Risk | Category | Likelihood | Impact | Mitigation |
-|---|---|---|---|---|---|
-| R-1 | Source portals change markup/structure, breaking scrapers | Technical | High | Medium | Adapter-per-source design (9.2) isolates breakage; ingestion-health dashboard (US-10) surfaces failures fast; automated structural-change detection with alerting. |
-| R-2 | AI extraction produces incorrect eligibility/deadline data, causing a user to miss a real deadline or misjudge eligibility | AI / Product | Medium | High | Every AI-derived field is traceable to source clause (NFR-6); low-confidence extractions flagged for review; deadline reminders always computed from the extracted date with a visible "verify against source PDF" link. |
-| R-3 | Legal/ToS risk from scraping certain source portals | Legal | Medium | High | Prioritize official APIs/open-data feeds where available (e.g., GeM open data); maintain a source allow-list reviewed by legal; respect robots.txt and rate limits; fallback to manual/partner data-sharing agreements for restricted sources. |
-| R-4 | LLM provider cost scales faster than subscription revenue | Business / Cost | Medium | Medium | AI-credit metering and plan gating (FR-SUB-3); response caching; batched extraction; scoped RAG context to minimize token usage. |
-| R-5 | Tenant data isolation bug exposes one organization's data to another | Security | Low | Critical | Enforced data-access-layer tenant predicate (13.3); automated tenant-isolation CI test suite; code review checklist requirement in ENGINEERING_GUIDE.md. |
-| R-6 | Over-reliance on AI match score causes users to miss good-fit tenders scored low (false negative) | AI / Product | Medium | Medium | Match score is advisory, not a hard filter — full search/browse always available unfiltered; score reasoning is shown, not a black box; continuous calibration from win/loss outcomes (FR-BID-3). |
-| R-7 | Single-region deployment creates availability exposure to a regional cloud outage | Infrastructure | Low | High | Multi-AZ within region for data services at launch; architecture documented as multi-region-ready (Section 14) for future scope if justified by growth. |
-| R-8 | Low digital literacy among target users (Persona: Priya) leads to low activation/adoption despite correct functionality | Product / Adoption | Medium | High | UX simplicity prioritized over feature density in frontend design; WhatsApp-based alerting planned (Section 18) to meet users on a familiar channel. |
-| R-9 | Payment gateway or subscription billing failure blocks paying customers from renewing/accessing the platform | Business | Low | Medium | Grace period before feature lockout on payment failure; automated retry + user notification via webhook handling; manual override path for Ops Admin. |
+| ID  | Risk                                                                                                                       | Category           | Likelihood | Impact   | Mitigation                                                                                                                                                                                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------- | ------------------ | ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-1 | Source portals change markup/structure, breaking scrapers                                                                  | Technical          | High       | Medium   | Adapter-per-source design (9.2) isolates breakage; ingestion-health dashboard (US-10) surfaces failures fast; automated structural-change detection with alerting.                                                                             |
+| R-2 | AI extraction produces incorrect eligibility/deadline data, causing a user to miss a real deadline or misjudge eligibility | AI / Product       | Medium     | High     | Every AI-derived field is traceable to source clause (NFR-6); low-confidence extractions flagged for review; deadline reminders always computed from the extracted date with a visible "verify against source PDF" link.                       |
+| R-3 | Legal/ToS risk from scraping certain source portals                                                                        | Legal              | Medium     | High     | Prioritize official APIs/open-data feeds where available (e.g., GeM open data); maintain a source allow-list reviewed by legal; respect robots.txt and rate limits; fallback to manual/partner data-sharing agreements for restricted sources. |
+| R-4 | LLM provider cost scales faster than subscription revenue                                                                  | Business / Cost    | Medium     | Medium   | AI-credit metering and plan gating (FR-SUB-3); response caching; batched extraction; scoped RAG context to minimize token usage.                                                                                                               |
+| R-5 | Tenant data isolation bug exposes one organization's data to another                                                       | Security           | Low        | Critical | Enforced data-access-layer tenant predicate (13.3); automated tenant-isolation CI test suite; code review checklist requirement in ENGINEERING_GUIDE.md.                                                                                       |
+| R-6 | Over-reliance on AI match score causes users to miss good-fit tenders scored low (false negative)                          | AI / Product       | Medium     | Medium   | Match score is advisory, not a hard filter — full search/browse always available unfiltered; score reasoning is shown, not a black box; continuous calibration from win/loss outcomes (FR-BID-3).                                              |
+| R-7 | Single-region deployment creates availability exposure to a regional cloud outage                                          | Infrastructure     | Low        | High     | Multi-AZ within region for data services at launch; architecture documented as multi-region-ready (Section 14) for future scope if justified by growth.                                                                                        |
+| R-8 | Low digital literacy among target users (Persona: Priya) leads to low activation/adoption despite correct functionality    | Product / Adoption | Medium     | High     | UX simplicity prioritized over feature density in frontend design; WhatsApp-based alerting planned (Section 18) to meet users on a familiar channel.                                                                                           |
+| R-9 | Payment gateway or subscription billing failure blocks paying customers from renewing/accessing the platform               | Business           | Low        | Medium   | Grace period before feature lockout on payment failure; automated retry + user notification via webhook handling; manual override path for Ops Admin.                                                                                          |
 
 ---
 
@@ -834,3 +839,24 @@ flowchart TB
 - **Blockchain-anchored audit trail** for enterprise/compliance-sensitive customers requiring tamper-evident bid history (extends Section 13.6).
 - **Peer benchmarking analytics** — anonymized, aggregated win-rate benchmarks by sector/category to help MSMEs gauge competitiveness (subject to privacy-preserving aggregation design).
 - **Multi-region deployment** if user base growth or data-residency requirements justify it (architecture already compute-portable per NFR-10, Section 14).
+
+# TenderIQ Architecture
+
+## High-Level Data Flow
+
+[CPPP Public Feed] -> (FastAPI Ingestion) -> [PostgreSQL (TenderEntity)]
+
+[React/Vite Client] -> (JWT Auth) -> [NestJS API] -> [PostgreSQL]
+|
+v
+[FastAPI AI Engine]
+|
++--------------------------+
+| 1. PyPDF Extraction |
+| 2. Semantic Chunking |
+| 3. Gemini Embeddings |
+| 4. pgvector Retrieval |
+| 5. Gemini RAG Extraction |
+| 6. Deterministic Rules |
+| 7. Confidence & Risk |
++--------------------------+
