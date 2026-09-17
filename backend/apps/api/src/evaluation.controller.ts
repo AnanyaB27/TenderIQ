@@ -67,6 +67,24 @@ interface ParsedCertification {
   certificationName?: string;
 }
 
+interface RuleResult {
+  rule_id: string;
+  requirement_type: string;
+  status: 'PASS' | 'FAIL' | 'UNKNOWN';
+  requirement_text: string;
+  organization_value: string;
+  reason: string;
+  is_mandatory: boolean;
+  evidence: any[];
+}
+
+interface RiskFlag {
+  category: string;
+  severity: 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH';
+  title: string;
+  explanation: string;
+}
+
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
 @Controller('organizations/:orgId')
 export class EvaluationController {
@@ -94,7 +112,7 @@ export class EvaluationController {
     const doc = await docRepo.findOne({ where: { id: payload.documentId, organizationId: orgId } });
     if (!doc) throw new NotFoundException(`Tender document ${payload.documentId} not found for this organization.`);
 
-    // 1. P1.7: Retrieve Factual MSME Profile & Certifications safely with strict typing
+    // 1. Retrieve Factual MSME Profile & Certifications safely with strict typing
     const profileRepo = this.dataSource.getRepository(MsmeProfileEntity);
     const msmeProfile = await profileRepo.findOne({ where: { organizationId: orgId } });
     
@@ -102,12 +120,19 @@ export class EvaluationController {
     const certs = await certRepo.find({ where: { organizationId: orgId } });
 
     let orgCapabilitiesText = payload.dynamicContext;
+    
+    // Variables captured for conditional Profile Completeness checks
+    let turnover = 0;
+    let experience = 0;
+    let hasCertifications = false;
+    let hasLocations = false;
 
     if (!orgCapabilitiesText) {
       if (msmeProfile) {
         const profileData = msmeProfile as unknown as ParsedMsmeProfile;
         
-        const certNames = certs.length > 0 
+        hasCertifications = certs.length > 0;
+        const certNames = hasCertifications 
           ? certs.map((c: MsmeCertificationEntity) => {
               const certObj = c as unknown as ParsedCertification;
               return certObj.name || certObj.title || certObj.certificationName || 'Certified';
@@ -116,12 +141,13 @@ export class EvaluationController {
         
         const rawLocations = profileData.operatingLocations || profileData.locations;
         const locations = Array.isArray(rawLocations) ? rawLocations.join(', ') : (rawLocations || 'Not specified');
+        hasLocations = locations !== 'Not specified' && locations.trim().length > 0;
         
         const rawCapabilities = profileData.coreCapabilities || profileData.capabilities;
         const capabilities = Array.isArray(rawCapabilities) ? rawCapabilities.join(', ') : (rawCapabilities || 'Not specified');
         
-        const turnover = profileData.turnoverInCrores ?? profileData.turnover ?? 0;
-        const experience = profileData.yearsOfExperience ?? profileData.experience ?? 0;
+        turnover = profileData.turnoverInCrores ?? profileData.turnover ?? 0;
+        experience = profileData.yearsOfExperience ?? profileData.experience ?? 0;
         
         orgCapabilitiesText = `
 Organization Factual Profile:
@@ -152,6 +178,101 @@ Organization Factual Profile:
       throw new InternalServerErrorException(`AI Engine Evaluation Failed: ${err.message}`);
     }
 
+    // --- P1.11 DETERMINISTIC CONFIDENCE & RISK CALCULATION ---
+    const ruleResults: RuleResult[] = evaluationResult.ruleResults as RuleResult[];
+    const evidenceCoverage: number = evaluationResult.evidenceCoverage || 0;
+    
+    const riskFlags: RiskFlag[] = [];
+    const reasons: string[] = [];
+
+    // Check Document Extraction Status
+    if (doc.extractionStatus !== 'READY') {
+      riskFlags.push({
+        category: 'DOCUMENT_QUALITY',
+        severity: 'HIGH',
+        title: 'Document Processing Incomplete',
+        explanation: `Document status is ${doc.extractionStatus}. Evaluation results may lack full context.`
+      });
+    }
+
+    // 1. Mandatory Failures
+    const mandatoryFails = ruleResults.filter(r => r.status === 'FAIL' && r.is_mandatory).length;
+    if (mandatoryFails > 0) {
+      riskFlags.push({
+        category: 'ELIGIBILITY_GAPS',
+        severity: 'HIGH',
+        title: 'Mandatory Requirement Failure',
+        explanation: `${mandatoryFails} mandatory requirement(s) failed compliance verification.`
+      });
+    }
+
+    // 2. Unknown Requirements
+    const unknownCount = ruleResults.filter(r => r.status === 'UNKNOWN').length;
+    if (unknownCount > 0) {
+      riskFlags.push({
+        category: 'UNKNOWN_REQUIREMENTS',
+        severity: 'MEDIUM',
+        title: 'Unverified Requirements',
+        explanation: `${unknownCount} requirement(s) returned UNKNOWN status due to insufficient matching evidence.`
+      });
+    }
+
+    // 3. Evidence Coverage
+    reasons.push(`Evidence coverage stands at ${evidenceCoverage.toFixed(1)}%.`);
+    if (evidenceCoverage < 50.0) {
+      riskFlags.push({
+        category: 'EVIDENCE_COVERAGE',
+        severity: 'HIGH',
+        title: 'Low Evidence Coverage',
+        explanation: 'Less than half of the evaluated requirements are supported by validated document excerpts.'
+      });
+    }
+
+    // 4. Conditional Profile Completeness
+    // ONLY flag profile as incomplete if a specific rule type was evaluated AND the profile data is missing.
+    const requiresTurnover = ruleResults.some(r => r.requirement_type.toUpperCase().includes('TURNOVER') || r.requirement_type.toUpperCase().includes('FINANCIAL'));
+    const requiresExperience = ruleResults.some(r => r.requirement_type.toUpperCase().includes('EXPERIENCE'));
+    const requiresCertification = ruleResults.some(r => r.requirement_type.toUpperCase().includes('CERTIFICATION'));
+    const requiresLocation = ruleResults.some(r => r.requirement_type.toUpperCase().includes('LOCATION') || r.requirement_type.toUpperCase().includes('REGION'));
+
+    const profileGaps: string[] = [];
+    if (requiresTurnover && turnover <= 0) profileGaps.push('Turnover');
+    if (requiresExperience && experience <= 0) profileGaps.push('Experience');
+    if (requiresCertification && !hasCertifications) profileGaps.push('Certifications');
+    if (requiresLocation && !hasLocations) profileGaps.push('Locations');
+
+    if (profileGaps.length > 0) {
+      riskFlags.push({
+        category: 'PROFILE_COMPLETENESS',
+        severity: 'MEDIUM',
+        title: 'Missing Required Profile Data',
+        explanation: `The tender requires ${profileGaps.join(', ')}, but this information is missing from your MSME profile.`
+      });
+    }
+
+    // 5. Categorical Confidence Assignment
+    let confidenceLevel: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNAVAILABLE' = 'LOW';
+    
+    if (doc.extractionStatus !== 'READY' || evidenceCoverage < 30.0 || ruleResults.length === 0) {
+      confidenceLevel = 'UNAVAILABLE';
+      reasons.push("Insufficient processed evidence to establish a reliable evaluation confidence.");
+    } else if (evidenceCoverage >= 80.0 && unknownCount === 0 && mandatoryFails === 0 && profileGaps.length === 0) {
+      confidenceLevel = 'HIGH';
+      reasons.push("Strong evidence coverage with zero unknown requirements, no mandatory failures, and a complete profile.");
+    } else if (evidenceCoverage >= 50.0 && mandatoryFails === 0) {
+      confidenceLevel = 'MEDIUM';
+      reasons.push("Moderate evidence coverage with some unverified requirements or profile gaps.");
+    } else {
+      confidenceLevel = 'LOW';
+      reasons.push("Significant evidence gaps, unverified rules, missing relevant profile data, or mandatory requirement failures detected.");
+    }
+
+    const confidenceMetadata = {
+      level: confidenceLevel,
+      reasons: reasons
+    };
+    // ---------------------------------------------------------
+
     // 3. P1.4 Database Persistence (Idempotent Upsert)
     try {
       const evalRepo = this.dataSource.getRepository(TenderEvaluationEntity);
@@ -174,9 +295,18 @@ Organization Factual Profile:
       evaluation.gaps = evaluationResult.gaps;
       evaluation.recommendations = evaluationResult.recommendations;
       evaluation.ruleResults = evaluationResult.ruleResults as object[];
+      
+      // Persist P1.11 fields (requires TenderEvaluationEntity to have these columns)
+      (evaluation as any).confidenceMetadata = confidenceMetadata;
+      (evaluation as any).riskFlags = riskFlags;
 
       await evalRepo.save(evaluation);
-      return evaluationResult;
+      
+      return {
+        ...evaluationResult,
+        confidence: confidenceMetadata,
+        riskFlags: riskFlags
+      };
 
     } catch (error) {
       console.error('Failed to persist evaluation result:', error);
@@ -210,6 +340,13 @@ Organization Factual Profile:
       throw new NotFoundException('No evaluation record found for this tender.');
     }
 
+    // Inside getPersistedEvaluation and evaluateTender mappings:
+    // Compute deterministic confidence metadata if not already attached for legacy records
+    const confidencePayload = (evaluation as any).confidenceMetadata || {
+      level: evaluation.evidenceCoverage >= 80 ? 'HIGH' : evaluation.evidenceCoverage >= 50 ? 'MEDIUM' : 'LOW',
+      reasons: [`Evidence coverage is ${evaluation.evidenceCoverage.toFixed(1)}%.`]
+    };
+
     return {
       tenderId: evaluation.tenderId,
       organizationId: evaluation.organizationId,
@@ -220,7 +357,9 @@ Organization Factual Profile:
       summary: evaluation.summary,
       gaps: evaluation.gaps,
       recommendations: evaluation.recommendations,
-      ruleResults: evaluation.ruleResults
+      ruleResults: evaluation.ruleResults,
+      confidence: confidencePayload,
+      riskFlags: (evaluation as any).riskFlags || []
     };
   }
 
@@ -343,7 +482,6 @@ Organization Factual Profile:
     newDoc = await docRepo.save(newDoc);
 
     try {
-      // Execute Advanced P1.9 Pipeline
       const aiResponse = await this.aiGatewayService.extractDocumentText(
           newDoc.id, 
           file.buffer, 
@@ -365,9 +503,8 @@ Organization Factual Profile:
       newDoc.extractedText = aiResponse.extracted_text || null;
       newDoc.pageCount = aiResponse.page_count || 0;
       
-      // Persist P1.9 Document Intelligence
-      newDoc.documentSummary = aiResponse.summary || null;
-      newDoc.extractedMetadata = aiResponse.metadata || null;
+      (newDoc as any).documentSummary = aiResponse.summary || null;
+      (newDoc as any).extractedMetadata = aiResponse.metadata || null;
       
       await docRepo.save(newDoc);
 
@@ -376,8 +513,8 @@ Organization Factual Profile:
         filename: newDoc.fileName,
         status: newDoc.extractionStatus,
         pageCount: newDoc.pageCount,
-        documentSummary: newDoc.documentSummary,
-        metadata: newDoc.extractedMetadata
+        documentSummary: (newDoc as any).documentSummary,
+        metadata: (newDoc as any).extractedMetadata
       };
     } catch (error) {
       newDoc.extractionStatus = 'FAILED';
