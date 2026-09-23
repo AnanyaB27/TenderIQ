@@ -8,5 +8,6 @@ import { DraftSectionsController } from './draft-sections.controller';
 @Module({
   controllers: [AiController, DraftSectionsController],
   providers: [AiGatewayService, AiCreditGuardService],
+  exports: [AiGatewayService],
 })
 export class AiModule {}

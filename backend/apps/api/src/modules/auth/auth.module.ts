@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -6,6 +6,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { UserEntity } from '../../../../../libs/database/entities/identity/user.entity';
 import { UserOauthIdentityEntity } from '../../../../../libs/database/entities/identity/user-oauth-identity.entity';
+import { OrganizationEntity } from '../../../../../libs/database/entities/identity/organization.entity';
+import { OrganizationMemberEntity } from '../../../../../libs/database/entities/identity/organization-member.entity';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -19,6 +21,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     TypeOrmModule.forFeature([
       UserEntity,
       UserOauthIdentityEntity,
+      OrganizationEntity,
+      OrganizationMemberEntity,
     ]),
 
     PassportModule.register({

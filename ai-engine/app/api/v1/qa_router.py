@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
+from app.db.session import get_session
 from app.rag.rag_service import RagService, RagAnswerResponse
 
 router = APIRouter(prefix="/internal/rag", tags=["rag"])
@@ -12,7 +12,7 @@ class RagRequest(BaseModel):
     top_k: int = 5
 
 @router.post("/answer", response_model=RagAnswerResponse)
-async def get_rag_answer(request: RagRequest, db: AsyncSession = Depends(get_db)):
+async def get_rag_answer(request: RagRequest, db: AsyncSession = Depends(get_session)):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 

@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { getMsmeProfile, updateMsmeProfile, MsmeProfile } from '../api';
-import { Save, Loader2, Building, ShieldCheck, MapPin, Target } from 'lucide-react';
+import { getMsmeProfile, updateMsmeProfile } from '../api';
+import { Save, Loader2, Building, MapPin, Target } from 'lucide-react';
 
 interface OrganizationProfileProps {
   organizationId: string;
 }
 
 export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organizationId }) => {
-  const [profile, setProfile] = useState<MsmeProfile>({
-    organizationId,
-    turnoverInCrores: 0,
-    yearsOfExperience: 0,
-    operatingLocations: [],
-    coreCapabilities: []
-  });
+  const [turnover, setTurnover] = useState<string>('');
+  const [experience, setExperience] = useState<string>('');
+  const [locations, setLocations] = useState<string>('');
+  const [capabilities, setCapabilities] = useState<string>('');
   
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
@@ -24,31 +21,45 @@ export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organi
       setLoading(true);
       const data = await getMsmeProfile(organizationId);
       if (data) {
-        setProfile(data);
+        // Aggressively check all possible backend property names
+        const fetchedTurnover = (data as any).annualTurnover ?? (data as any).turnoverInCrores ?? (data as any).annual_turnover ?? '';
+        setTurnover(fetchedTurnover.toString());
+        setExperience(data.yearsOfExperience?.toString() || '');
+        setLocations(data.operatingLocations?.join(', ') || '');
+        setCapabilities(data.coreCapabilities?.join(', ') || '');
       }
       setLoading(false);
     }
     loadProfile();
   }, [organizationId]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setProfile(prev => ({ ...prev, [name]: Number(value) }));
-  };
-
-  const handleArrayChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'operatingLocations' | 'coreCapabilities') => {
-    const values = e.target.value.split(',').map(v => v.trim()).filter(Boolean);
-    setProfile(prev => ({ ...prev, [field]: values }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setMessage(null);
     
-    const updated = await updateMsmeProfile(organizationId, profile);
+    const parsedLocations = locations.split(',').map(s => s.trim()).filter(Boolean);
+    const parsedCapabilities = capabilities.split(',').map(s => s.trim()).filter(Boolean);
+
+    const payload = {
+      turnoverInCrores: turnover ? Number(turnover) : 0,
+      annualTurnover: turnover ? Number(turnover) : 0, // Bulletproof fallback for backend
+      yearsOfExperience: experience ? Number(experience) : 0,
+      operatingLocations: parsedLocations,
+      coreCapabilities: parsedCapabilities
+    };
+    
+    const updated = await updateMsmeProfile(organizationId, payload);
     if (updated) {
-      setProfile(updated);
+      // Extract data safely regardless of backend response wrapping
+      const profileData = (updated as any).data || (updated as any).profile || updated;
+      const newTurnover = profileData.annualTurnover ?? profileData.turnoverInCrores ?? profileData.annual_turnover ?? turnover;
+      
+      setTurnover(newTurnover.toString());
+      setExperience(profileData.yearsOfExperience?.toString() || experience);
+      setLocations(profileData.operatingLocations?.join(', ') || locations);
+      setCapabilities(profileData.coreCapabilities?.join(', ') || capabilities);
+      
       setMessage({ text: 'Profile successfully updated. Changes will apply to future AI evaluations.', type: 'success' });
     } else {
       setMessage({ text: 'Failed to update profile. Please try again.', type: 'error' });
@@ -60,7 +71,7 @@ export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organi
     return (
       <div className="flex justify-center items-center p-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-        <span className="ml-3 text-gray-600">Loading organizational profile...</span>
+        <span className="ml-3 text-gray-600 font-medium">Loading organizational profile...</span>
       </div>
     );
   }
@@ -79,8 +90,6 @@ export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organi
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-        
-        {/* Core Metrics */}
         <section>
           <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
             <Building className="w-5 h-5 mr-2 text-indigo-500" /> Core Metrics
@@ -90,12 +99,12 @@ export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organi
               <label className="block text-sm font-medium text-gray-700 mb-1">Annual Turnover (INR Crores)</label>
               <input
                 type="number"
-                name="turnoverInCrores"
                 min="0"
                 step="0.1"
-                value={profile.turnoverInCrores || 0}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={turnover}
+                onChange={(e) => setTurnover(e.target.value)}
+                className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="e.g. 25"
                 required
               />
             </div>
@@ -103,18 +112,17 @@ export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organi
               <label className="block text-sm font-medium text-gray-700 mb-1">Years of Experience</label>
               <input
                 type="number"
-                name="yearsOfExperience"
                 min="0"
-                value={profile.yearsOfExperience || 0}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={experience}
+                onChange={(e) => setExperience(e.target.value)}
+                className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="e.g. 8"
                 required
               />
             </div>
           </div>
         </section>
 
-        {/* Operational Context */}
         <section>
           <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
             <MapPin className="w-5 h-5 mr-2 text-indigo-500" /> Operational Context
@@ -123,27 +131,26 @@ export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organi
             <label className="block text-sm font-medium text-gray-700 mb-1">Operating Locations (Comma separated)</label>
             <input
               type="text"
-              defaultValue={profile.operatingLocations.join(', ')}
-              onChange={(e) => handleArrayChange(e, 'operatingLocations')}
+              value={locations}
+              onChange={(e) => setLocations(e.target.value)}
               placeholder="e.g., Bangalore, Karnataka, Maharashtra"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
         </section>
 
-        {/* Capabilities */}
         <section>
           <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
             <Target className="w-5 h-5 mr-2 text-indigo-500" /> Technical Capabilities
           </h2>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Core Capabilities (Comma separated)</label>
-            <input
-              type="text"
-              defaultValue={profile.coreCapabilities.join(', ')}
-              onChange={(e) => handleArrayChange(e, 'coreCapabilities')}
+            <textarea
+              value={capabilities}
+              onChange={(e) => setCapabilities(e.target.value)}
+              rows={4}
               placeholder="e.g., Embedded Systems, AI Development, Network Hardware"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
         </section>

@@ -226,7 +226,7 @@ export interface Certification {
 
 export async function getMsmeProfile(organizationId: string): Promise<MsmeProfile | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/msme-profile`, {
+    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/profile`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -243,7 +243,7 @@ export async function getMsmeProfile(organizationId: string): Promise<MsmeProfil
 
 export async function updateMsmeProfile(organizationId: string, profile: Partial<MsmeProfile>): Promise<MsmeProfile | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/msme-profile`, {
+    const response = await fetch(`${API_BASE_URL}/organizations/${organizationId}/profile`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(profile),

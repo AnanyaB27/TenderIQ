@@ -1,4 +1,4 @@
-import {
+﻿import {
   Body,
   Controller,
   HttpCode,
@@ -40,6 +40,19 @@ export class AuthController {
     @Body() googleLoginDto: GoogleLoginDto,
   ): Promise<AuthResponseDto> {
     return this.authService.loginWithGoogle(googleLoginDto.idToken);
+  }
+
+  @Post('local')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Local development demo login',
+  })
+  @ApiOkResponse({
+    description: 'Local demo authentication successful.',
+    type: AuthResponseDto,
+  })
+  async localLogin(): Promise<AuthResponseDto> {
+    return this.authService.loginLocalDemo();
   }
 
   @Post('refresh')
