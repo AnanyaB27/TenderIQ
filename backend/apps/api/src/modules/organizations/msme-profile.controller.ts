@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -24,13 +25,63 @@ import {
 import { MsmeProfileService } from './msme-profile.service';
 
 @ApiTags('MSME Profile')
-@Controller('organizations/msme-profile')
+@Controller('organizations')
 export class MsmeProfileController {
   constructor(
     private readonly msmeProfileService: MsmeProfileService,
   ) {}
 
-  @Post()
+  // ---------------------------------------------------------
+  // Organization-scoped profile API used by TenderIQ frontend
+  // ---------------------------------------------------------
+
+  @Get(':organizationId/profile')
+  @ApiOperation({
+    summary: 'Get MSME profile for an organization',
+  })
+  @ApiParam({
+    name: 'organizationId',
+    type: String,
+    format: 'uuid',
+  })
+  async getOrganizationProfile(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+  ): Promise<MsmeProfileEntity | null> {
+    return this.msmeProfileService.findByOrganizationId(
+      organizationId,
+    );
+  }
+
+  @Put(':organizationId/profile')
+  @ApiOperation({
+    summary: 'Create or update MSME profile for an organization',
+  })
+  @ApiParam({
+    name: 'organizationId',
+    type: String,
+    format: 'uuid',
+  })
+  async updateOrganizationProfile(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Body()
+    body: {
+      turnoverInCrores?: number | null;
+      yearsOfExperience?: number | null;
+      operatingLocations?: string[] | null;
+      coreCapabilities?: string[] | null;
+    },
+  ): Promise<MsmeProfileEntity> {
+    return this.msmeProfileService.createOrUpdateForOrganization(
+      organizationId,
+      body,
+    );
+  }
+
+  // ---------------------------------------------------------
+  // Existing CRUD API — preserved
+  // ---------------------------------------------------------
+
+  @Post('msme-profile')
   @ApiOperation({
     summary: 'Create a new MSME profile',
   })
@@ -45,7 +96,7 @@ export class MsmeProfileController {
     return this.msmeProfileService.create(dto);
   }
 
-  @Get()
+  @Get('msme-profile')
   @ApiOperation({
     summary: 'Retrieve all MSME profiles',
   })
@@ -58,7 +109,7 @@ export class MsmeProfileController {
     return this.msmeProfileService.findAll();
   }
 
-  @Get(':id')
+  @Get('msme-profile/:id')
   @ApiOperation({
     summary: 'Retrieve an MSME profile by ID',
   })
@@ -68,22 +119,13 @@ export class MsmeProfileController {
     type: String,
     format: 'uuid',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'MSME profile retrieved successfully.',
-    type: MsmeProfileEntity,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'MSME profile not found.',
-  })
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<MsmeProfileEntity> {
     return this.msmeProfileService.findOne(id);
   }
 
-  @Patch(':id')
+  @Patch('msme-profile/:id')
   @ApiOperation({
     summary: 'Update an MSME profile',
   })
@@ -93,15 +135,6 @@ export class MsmeProfileController {
     type: String,
     format: 'uuid',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'MSME profile updated successfully.',
-    type: MsmeProfileEntity,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'MSME profile not found.',
-  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateMsmeProfileDto,
@@ -109,7 +142,7 @@ export class MsmeProfileController {
     return this.msmeProfileService.update(id, dto);
   }
 
-  @Delete(':id')
+  @Delete('msme-profile/:id')
   @ApiOperation({
     summary: 'Delete an MSME profile',
   })
@@ -118,14 +151,6 @@ export class MsmeProfileController {
     description: 'MSME profile UUID',
     type: String,
     format: 'uuid',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'MSME profile deleted successfully.',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'MSME profile not found.',
   })
   remove(
     @Param('id', ParseUUIDPipe) id: string,

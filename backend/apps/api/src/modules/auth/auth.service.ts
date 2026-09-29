@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+﻿import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -6,6 +10,13 @@ import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
 
 import { UserEntity } from '../../../../../libs/database/entities/identity/user.entity';
+import {
+  OrganizationEntity,
+} from '../../../../../libs/database/entities/identity/organization.entity';
+import {
+  OrganizationMemberEntity,
+  OrganizationRole,
+} from '../../../../../libs/database/entities/identity/organization-member.entity';
 import { UserOauthIdentityEntity } from '../../../../../libs/database/entities/identity/user-oauth-identity.entity';
 import { AuthResponseDto } from './dto/auth.dto';
 
@@ -19,6 +30,12 @@ export class AuthService {
 
     @InjectRepository(UserOauthIdentityEntity)
     private readonly oauthIdentityRepository: Repository<UserOauthIdentityEntity>,
+
+    @InjectRepository(OrganizationEntity)
+    private readonly organizationRepository: Repository<OrganizationEntity>,
+
+    @InjectRepository(OrganizationMemberEntity)
+    private readonly memberRepository: Repository<OrganizationMemberEntity>,
 
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -58,9 +75,7 @@ export class AuthService {
       const normalizedEmail = email.toLowerCase();
 
       let user = await this.userRepository.findOne({
-        where: {
-          email: normalizedEmail,
-        },
+        where: { email: normalizedEmail },
       });
 
       if (!user) {
@@ -106,6 +121,75 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Invalid or expired Google token');
     }
+  }
+
+  async loginLocalDemo(): Promise<AuthResponseDto> {
+    if (this.configService.get<string>('NODE_ENV') === 'production') {
+      throw new ForbiddenException('Local demo login is disabled in production.');
+    }
+
+    const email = 'demo@tenderiq.local';
+
+    let user = await this.userRepository.findOne({
+      where: { email },
+    });
+
+    if (!user) {
+      user = this.userRepository.create({
+        email,
+        firstName: 'TenderIQ',
+        lastName: 'Demo User',
+        avatarUrl: null,
+        isActive: true,
+        lastLoginAt: new Date(),
+      });
+    } else {
+      user.isActive = true;
+      user.lastLoginAt = new Date();
+    }
+
+    user = await this.userRepository.save(user);
+
+    let organization = await this.organizationRepository.findOne({
+      where: { name: 'VaultOfCodes Solutions' },
+    });
+
+    if (!organization) {
+      organization = this.organizationRepository.create({
+        name: 'VaultOfCodes Solutions',
+        isActive: true,
+      });
+      organization = await this.organizationRepository.save(organization);
+    }
+
+    let membership = await this.memberRepository.findOne({
+      where: {
+        organizationId: organization.id,
+        userId: user.id,
+      },
+    });
+
+    if (!membership) {
+      membership = this.memberRepository.create({
+        organizationId: organization.id,
+        userId: user.id,
+        role: OrganizationRole.OWNER,
+        isActive: true,
+      });
+      await this.memberRepository.save(membership);
+    } else if (!membership.isActive || membership.role !== OrganizationRole.OWNER) {
+      membership.isActive = true;
+      membership.role = OrganizationRole.OWNER;
+      await this.memberRepository.save(membership);
+    }
+
+    const response = this.generateAuthResponse(user);
+    response.organization = {
+      id: organization.id,
+      name: organization.name,
+    };
+
+    return response;
   }
 
   async refreshTokens(refreshToken: string): Promise<AuthResponseDto> {

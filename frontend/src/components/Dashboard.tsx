@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, Shield, Loader2, Upload, FileText, Trash2, Building, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import { getTenders, PaginatedTenders, Tender, uploadDocument } from '../api';
 import { TenderEvaluation } from './TenderEvaluation';
@@ -31,7 +31,7 @@ export default function Dashboard() {
   const [selectedTenderObj, setSelectedTenderObj] = useState<Tender | null>(null);
 
   // Extract authenticated organization context dynamically
-  const authOrgId = localStorage.getItem('activeOrganizationId') || 'org-123';
+  const authOrgId = localStorage.getItem('activeOrganizationId') || '';
 
   // Debounce search input
   useEffect(() => {
@@ -148,7 +148,7 @@ export default function Dashboard() {
             onClick={() => setSelectedTenderObj(null)}
             className="text-blue-600 hover:text-blue-800 font-medium flex items-center bg-white px-4 py-2 rounded shadow-sm border border-gray-200"
           >
-            ← Back to Details
+            â† Back to Details
           </button>
         </div>
         <TenderEvaluation 
@@ -166,7 +166,7 @@ export default function Dashboard() {
     return (
       <div className="max-w-5xl mx-auto p-6 space-y-6 mt-6">
         <button onClick={closeInspector} className="text-blue-600 hover:underline mb-4 inline-block">
-          ← Back to Search Feed
+          â† Back to Search Feed
         </button>
         
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
@@ -413,7 +413,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <h4 className="text-sm font-medium text-white">{item.tenderTitle && item.tenderTitle !== 'Untitled Tender' ? item.tenderTitle : 'Supply & Installation of IoT Wildlife Monitoring Cameras'}</h4>
-                    <p className="text-xs text-slate-400">Estimated Value: ₹{Number(item.estimatedValue || 4500000).toLocaleString()}</p>
+                    <p className="text-xs text-slate-400">Estimated Value: â‚¹{Number(item.estimatedValue || 4500000).toLocaleString()}</p>
                   </div>
                   <div className="flex items-center space-x-3">
                     <button

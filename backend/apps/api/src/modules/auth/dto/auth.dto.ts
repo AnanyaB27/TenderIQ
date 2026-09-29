@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+﻿import { IsNotEmpty, IsString } from 'class-validator';
 
 export class GoogleLoginDto {
   @IsString()
@@ -20,8 +20,14 @@ export class AuthUserDto {
   avatarUrl!: string | null;
 }
 
+export class AuthOrganizationDto {
+  id!: string;
+  name!: string;
+}
+
 export class AuthResponseDto {
   accessToken!: string;
   refreshToken!: string;
   user!: AuthUserDto;
+  organization?: AuthOrganizationDto;
 }

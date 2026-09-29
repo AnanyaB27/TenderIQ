@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException, BadGatewayException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  BadGatewayException,
+} from '@nestjs/common';
 
 export interface MatchEvaluationRequest {
   document_id: string;
@@ -41,50 +45,110 @@ export interface MatchEvaluationResponse {
 
 @Injectable()
 export class AiGatewayService {
-  private readonly AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:8000';
+  private readonly AI_ENGINE_URL =
+    process.env.AI_ENGINE_URL || 'http://localhost:8000';
 
-  async evaluateTenderMatch(orgId: string, requestPayload: MatchEvaluationRequest): Promise<MatchEvaluationResponse> {
+  async evaluateTenderMatch(
+    orgId: string,
+    requestPayload: MatchEvaluationRequest,
+  ): Promise<MatchEvaluationResponse> {
     try {
-      const response = await fetch(`${this.AI_ENGINE_URL}/internal/orgs/${orgId}/match`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestPayload),
-      });
+      const response = await fetch(
+        `${this.AI_ENGINE_URL}/internal/orgs/${orgId}/match`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestPayload),
+        },
+      );
 
       if (!response.ok) {
-        throw new BadGatewayException(`AI Engine Error: ${response.statusText}`);
+        const errorBody = await response.text();
+
+        console.error(
+          `AI Engine evaluation failed: HTTP ${response.status} ${response.statusText}`,
+          errorBody,
+        );
+
+        throw new BadGatewayException(
+          `AI Engine Error (${response.status}): ${errorBody}`,
+        );
       }
 
-      return await response.json() as MatchEvaluationResponse;
+      return (await response.json()) as MatchEvaluationResponse;
     } catch (error) {
-      if (error instanceof BadGatewayException) throw error;
-      throw new InternalServerErrorException('Could not connect to the AI Engine for evaluation.');
+      if (error instanceof BadGatewayException) {
+        throw error;
+      }
+
+      console.error(
+        'AiGatewayService - Evaluation Error:',
+        error,
+      );
+
+      throw new InternalServerErrorException(
+        'Could not connect to the AI Engine for evaluation.',
+      );
     }
   }
 
-  // ... (existing imports and evaluateTenderMatch code) ...
-
-  async extractDocumentText(documentId: string, fileBuffer: Buffer, mimetype: string, originalname: string): Promise<Record<string, unknown>> {
+  async extractDocumentText(
+    documentId: string,
+    fileBuffer: Buffer,
+    mimetype: string,
+    originalname: string,
+  ): Promise<Record<string, unknown>> {
     try {
       const formData = new FormData();
-      formData.append('document_id', documentId); // <-- NEW: Passes ID to AI Engine
-      const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimetype });
-      formData.append('file', blob, originalname);
 
-      const response = await fetch(`${this.AI_ENGINE_URL}/internal/documents/extract-text`, {
-        method: 'POST',
-        body: formData,
-      });
+      formData.append('document_id', documentId);
+
+      const blob = new Blob(
+        [new Uint8Array(fileBuffer)],
+        { type: mimetype },
+      );
+
+      formData.append(
+        'file',
+        blob,
+        originalname,
+      );
+
+      const response = await fetch(
+        `${this.AI_ENGINE_URL}/internal/documents/extract-text`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      );
 
       if (!response.ok) {
-        throw new BadGatewayException('Failed to extract and process document in AI engine');
+        const errorBody = await response.text();
+
+        console.error(
+          `AI Engine document extraction failed: HTTP ${response.status} ${response.statusText}`,
+          errorBody,
+        );
+
+        throw new BadGatewayException(
+          `AI Engine document extraction failed (${response.status}): ${errorBody}`,
+        );
       }
 
-      return await response.json() as Record<string, unknown>;
+      return (await response.json()) as Record<string, unknown>;
     } catch (error) {
-      console.error('AiGatewayService - Document Pipeline Error:', error);
-      if (error instanceof BadGatewayException) throw error;
-      throw new InternalServerErrorException('Document parsing and processing failed');
+      console.error(
+        'AiGatewayService - Document Pipeline Error:',
+        error,
+      );
+
+      if (error instanceof BadGatewayException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Document parsing and processing failed',
+      );
     }
   }
 }

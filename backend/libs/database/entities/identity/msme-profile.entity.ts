@@ -7,6 +7,7 @@ import {
   OneToOne,
   JoinColumn,
 } from 'typeorm';
+
 import { OrganizationEntity } from './organization.entity';
 
 @Entity('msme_profiles')
@@ -117,6 +118,30 @@ export class MsmeProfileEntity {
     name: 'year_established',
   })
   yearEstablished!: number | null;
+
+  // Procurement profile fields used by TenderIQ matching.
+  @Column({
+    type: 'int',
+    nullable: true,
+    name: 'years_of_experience',
+  })
+  yearsOfExperience!: number | null;
+
+  @Column({
+    type: 'text',
+    array: true,
+    nullable: true,
+    name: 'operating_locations',
+  })
+  operatingLocations!: string[] | null;
+
+  @Column({
+    type: 'text',
+    array: true,
+    nullable: true,
+    name: 'core_capabilities',
+  })
+  coreCapabilities!: string[] | null;
 
   @Column({
     type: 'boolean',

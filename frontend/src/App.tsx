@@ -1,15 +1,28 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
+
 import { checkBackendHealth } from './services/api';
+
 import Dashboard from './components/Dashboard';
+
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
+
 import { ShieldCheck, Server, Activity, LogOut } from 'lucide-react';
 
 export default function App() {
-  const [backendStatus, setBackendStatus] = useState<string>('Connecting...');
+  const [backendStatus, setBackendStatus] =
+    useState<string>('Connecting...');
+
   const [isConnected, setIsConnected] = useState<boolean>(false);
- const [view, setView] = useState<'landing' | 'login' | 'signup' | 'forgot' | 'dashboard'>('landing');
+
+  const [view, setView] = useState<
+    'landing' | 'login' | 'signup' | 'forgot' | 'dashboard'
+  >(
+    localStorage.getItem('accessToken')
+      ? 'dashboard'
+      : 'landing',
+  );
 
   useEffect(() => {
     checkBackendHealth()
@@ -23,11 +36,20 @@ export default function App() {
       });
   }, []);
 
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('activeOrganizationId');
+
+    setView('landing');
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col justify-between p-6 md:p-8 font-sans">
 
       {/* Header */}
       <header className="max-w-6xl mx-auto w-full flex justify-between items-center border-b border-slate-800 pb-6">
+
         <div
           className="flex items-center space-x-3 cursor-pointer"
           onClick={() => setView('landing')}
@@ -37,14 +59,20 @@ export default function App() {
           </div>
 
           <div>
-            <h1 className="text-lg font-bold tracking-tight">TenderIQ</h1>
-            <p className="text-xs text-slate-400">AI Procurement OS</p>
+            <h1 className="text-lg font-bold tracking-tight">
+              TenderIQ
+            </h1>
+
+            <p className="text-xs text-slate-400">
+              AI Procurement OS
+            </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-4">
 
           <div className="hidden sm:flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full text-xs">
+
             <span
               className={`w-2.5 h-2.5 rounded-full ${
                 isConnected
@@ -60,36 +88,41 @@ export default function App() {
 
           {view === 'dashboard' && (
             <button
-              onClick={() => setView('landing')}
+              onClick={handleLogout}
               className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3 py-1.5 rounded-lg text-xs text-slate-300 transition"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Home</span>
+              <span>Logout</span>
             </button>
           )}
 
         </div>
       </header>
 
-
       {/* Main Content Area */}
       <main className="max-w-6xl mx-auto w-full my-auto py-6">
 
-       {view === 'login' ? (
-  <Login
-  onSignup={() => setView('signup')}
-  onForgotPassword={() => setView('forgot')}
-  onLogin={() => setView('dashboard')}
-/>
-) : view === 'signup' ? (
-  <Signup
-    onLogin={() => setView('login')}
-  />
-) : view === 'forgot' ? (
-  <ForgotPassword
-    onLogin={() => setView('login')}
-  />
-) : view === 'landing' ? (
+        {view === 'login' ? (
+
+          <Login
+            onSignup={() => setView('signup')}
+            onForgotPassword={() => setView('forgot')}
+            onLogin={() => setView('dashboard')}
+          />
+
+        ) : view === 'signup' ? (
+
+          <Signup
+            onLogin={() => setView('login')}
+          />
+
+        ) : view === 'forgot' ? (
+
+          <ForgotPassword
+            onLogin={() => setView('login')}
+          />
+
+        ) : view === 'landing' ? (
 
           <div className="text-center space-y-6 max-w-3xl mx-auto py-12">
 
@@ -100,6 +133,7 @@ export default function App() {
 
             <h2 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
               Intelligent Procurement <br />
+
               <span className="text-indigo-400">
                 Operating System
               </span>
@@ -111,25 +145,26 @@ export default function App() {
 
             <div className="pt-4 flex justify-center gap-4">
 
-              {/* Existing Dashboard Button */}
+              {/* Launch Button */}
               <button
                 onClick={() => setView('login')}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-600/25 flex items-center space-x-2"
               >
-                <span>Launch Tender Intelligence Hub</span>
+                <span>
+                  Launch Tender Intelligence Hub
+                </span>
               </button>
 
               {/* Login Button */}
-             <button
-  type="button"
-  onClick={() => setView('login')}
-  className="text-indigo-600 font-semibold hover:text-indigo-700"
->
-  Login
-</button>
+              <button
+                type="button"
+                onClick={() => setView('login')}
+                className="text-indigo-600 font-semibold hover:text-indigo-700"
+              >
+                Login
+              </button>
 
             </div>
-
           </div>
 
         ) : (
@@ -140,11 +175,12 @@ export default function App() {
 
       </main>
 
-
       {/* Footer */}
       <footer className="max-w-6xl mx-auto w-full text-center border-t border-slate-900 pt-6 text-xs text-slate-500 flex flex-col sm:flex-row justify-between gap-2">
 
-        <p>© 2026 TenderIQ. All rights reserved.</p>
+        <p>
+          © 2026 TenderIQ. All rights reserved.
+        </p>
 
         <p className="flex items-center justify-center space-x-1">
           <Server className="w-3 h-3" />

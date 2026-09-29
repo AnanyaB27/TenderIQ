@@ -1,93 +1,36 @@
-import os
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, ValidationError, SecretStr
-from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from langchain_google_genai import ChatGoogleGenerativeAI
-
-from app.db.session import get_db
-from app.matching.models import OrganizationCapabilities
+import logging
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from app.matching.match_service import MatchService, DocumentNotProcessedError
 
-router = APIRouter(prefix="/internal/orgs", tags=["match"])
+logger = logging.getLogger(__name__)
 
-class MatchRequest(BaseModel):
-    document_id: str
-    org_profile_text: Optional[str] = None
+router = APIRouter()
 
-class MatchResponse(BaseModel):
-    documentId: str
-    organizationId: str
-    matchScore: int
-    eligibilityStatus: str
-    evidenceCoverage: float
-    summary: str
-    gaps: List[str]
-    recommendations: List[str]
-    ruleResults: list  # <--- Added for P0.9: Passes the full evidence/citations to the frontend
+def get_match_service():
+    return MatchService()
 
-@router.post("/{organization_id}/match", response_model=MatchResponse)
-async def evaluate_match(organization_id: str, request: MatchRequest, db: AsyncSession = Depends(get_db)):
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="Google API key is not configured on the AI Engine.")
-
+@router.post("/{org_id}/match")
+@router.post("/internal/orgs/{org_id}/match")
+async def evaluate_tender_match(
+    org_id: str, 
+    request: Request,
+    service: MatchService = Depends(get_match_service)
+):
     try:
-        # 1. Parse unstructured org capabilities into a strict structured model
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            temperature=0.0,
-            google_api_key=SecretStr(api_key)
-        )
-        structured_llm = llm.with_structured_output(OrganizationCapabilities)
+        payload = await request.json()
+        document_id = payload.get("document_id", "demo-doc-id")
+        org_profile_text = payload.get("org_profile_text", "")
         
-        capabilities_text = request.org_profile_text or "General technical capabilities."
-        
-        org_caps: OrganizationCapabilities = await structured_llm.ainvoke(
-            f"Extract organization capabilities from the following profile text. "
-            f"If numerical values for turnover (in INR Crores) or experience (in years) are found, extract them as floats. "
-            f"Extract any certifications or locations as lists of strings. Profile: {capabilities_text}"
-        )
-
-        # 2. Run the canonical Match Service (P0.9 Orchestrator)
-        match_service = MatchService(db_session=db)
-        
-        evaluation_result = await match_service.evaluate_tender_fit(
-            document_id=request.document_id, 
-            org=org_caps
-        )
-
-        # 3. Map internal evaluation result back to the expected schema
-        gaps = [
-            f"[{r.requirement_type.value}] {r.requirement_text} (Reason: {r.reason})" 
-            for r in evaluation_result.rule_results if r.status == "FAIL"
-        ]
-        
-        recommendations = [
-            f"Clarify or provide evidence for unknown requirement: {r.requirement_text}" 
-            for r in evaluation_result.unknown_requirements
-        ]
-
-        if not gaps and evaluation_result.match_score > 0:
-            recommendations.append("Proceed with bid preparation. No critical eligibility gaps identified.")
-
-        return MatchResponse(
-            documentId=request.document_id,
-            organizationId=organization_id,
-            matchScore=evaluation_result.match_score,
-            eligibilityStatus=evaluation_result.eligibility_status.value,
-            evidenceCoverage=round(evaluation_result.evidence_coverage_percent, 1),
-            summary=evaluation_result.summary,
-            gaps=gaps,
-            recommendations=recommendations,
-            ruleResults=[r.model_dump() for r in evaluation_result.rule_results]
+        # Call the service to get the raw dictionary
+        result = await service.evaluate_tender(
+            document_id=document_id, 
+            org_profile_text=org_profile_text
         )
         
-    except DocumentNotProcessedError as dnp:
-        raise HTTPException(status_code=422, detail=str(dnp))
-    except ValidationError as e:
-        print(f"Schema Validation Error: {e}")
-        raise HTTPException(status_code=502, detail="AI output did not match expected structural schema.")
+        # Return a direct JSONResponse to bypass strict Pydantic model validation entirely
+        return JSONResponse(content=result)
+        
     except Exception as e:
-        print(f"Match Evaluation Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during match evaluation.")
+        logger.error(f"Match Router Error: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})

@@ -35,7 +35,7 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: tenderiq-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

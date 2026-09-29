@@ -1,37 +1,50 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ColumnType } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('tender_document_chunks')
 export class TenderDocumentChunkEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'document_id' })
-  documentId: string;
+  @Column({ name: 'tender_document_id', type: 'uuid' })
+  tenderDocumentId: string;
 
-  @Column({ name: 'chunk_hash', nullable: true })
-  chunkHash: string;
+  @Column({ name: 'chunk_index', type: 'int' })
+  chunkIndex: number;
 
-  @Column({ type: 'int', name: 'sequence_number', default: 1 })
-  sequenceNumber: number;
+  @Column({ name: 'page_number', type: 'int', nullable: true })
+  pageNumber: number;
+
+  @Column({ name: 'section_title', type: 'varchar', nullable: true })
+  sectionTitle: string;
 
   @Column({ type: 'text' })
-  text: string;
+  content: string;
 
-  @Column({ type: 'int', name: 'page_start', default: 1 })
-  pageStart: number;
+  @Column({ name: 'token_count', type: 'int', nullable: true })
+  tokenCount: number;
 
-  @Column({ type: 'int', name: 'page_end', default: 1 })
-  pageEnd: number;
+  @Column({ name: 'character_count', type: 'int' })
+  characterCount: number;
 
-  @Column({ name: 'section_heading', nullable: true })
-  sectionHeading: string;
+  @Column({ type: 'varchar', nullable: true })
+  checksum: string;
 
-  @Column({ type: 'int', name: 'char_count', default: 0 })
-  charCount: number;
+  @Column({ type: 'varchar', nullable: true })
+  language: string;
 
-  @Column({ type: 'vector' as unknown as ColumnType, length: 768, nullable: true })
-  embedding: number[] | string | null;
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: any;
+
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
+
+  // ---> THE CRITICAL MISSING COLUMN FOR PGVECTOR <---
+  @Column({ type: 'varchar', nullable: true }) // Stored as string/vector representation depending on TypeORM pgvector setup
+  embedding: any; 
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }
