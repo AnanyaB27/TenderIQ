@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_session
 from app.extraction.pipeline_service import DocumentPipelineService
+from app.embeddings.embedding_client import EmbeddingClient  # FIX: Imported the client
 import traceback
 
 router = APIRouter(
@@ -31,7 +32,9 @@ async def extract_text(
         )
 
     try:
-        pipeline = DocumentPipelineService(db)
+        # FIX: Instantiate and inject the embedding client so real vectors are generated
+        embedding_client = EmbeddingClient()
+        pipeline = DocumentPipelineService(db, embedding_client=embedding_client)
 
         result = await pipeline.process_document(
             document_id,

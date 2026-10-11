@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Activity } from "lucide-react";
+import { Activity, Loader2 } from "lucide-react";
+import { loginLocalDemo } from "../api";
 
 interface LoginProps {
   onSignup: () => void;
@@ -13,6 +14,44 @@ export default function Login({
   onLogin,
 }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Auto-fill for the backend's local demo account
+  const [email, setEmail] = useState("demo@tenderiq.local");
+
+  const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Hit the actual NestJS backend auth controller
+      const authData = await loginLocalDemo();
+      
+      // Persist the JWT and Organization ID for future API calls
+      localStorage.setItem('accessToken', authData.accessToken);
+      localStorage.setItem('refreshToken', authData.refreshToken);
+      if (authData.organization?.id) {
+        localStorage.setItem('activeOrganizationId', authData.organization.id);
+      }
+      
+      // Navigate to dashboard
+      onLogin();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to connect to authentication server. Is the NestJS backend running?");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
@@ -23,7 +62,6 @@ export default function Login({
           <div className="bg-indigo-600 p-3 rounded-xl">
             <Activity className="w-7 h-7 text-white" />
           </div>
-
           <span className="text-2xl font-bold text-slate-900">
             TenderIQ
           </span>
@@ -36,56 +74,41 @@ export default function Login({
             <h1 className="text-2xl font-bold text-slate-900">
               Welcome Back
             </h1>
-
             <p className="mt-2 text-sm text-slate-500">
               Login to continue to TenderIQ
             </p>
           </div>
 
-          <form
-            className="space-y-5"
-            onSubmit={(e) => {
-              e.preventDefault();
+          {error && (
+            <div className="mb-6 p-3 bg-red-50 text-red-700 text-sm border border-red-200 rounded-lg text-center">
+              {error}
+            </div>
+          )}
 
-              const form = e.currentTarget;
-
-              if (!form.checkValidity()) {
-                form.reportValidity();
-                return;
-              }
-
-              onLogin();
-            }}
-          >
+          <form className="space-y-5" onSubmit={handleLoginSubmit}>
 
             {/* Email */}
             <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-slate-700 mb-2"
-              >
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
                 Email
               </label>
-
               <input
                 id="email"
                 type="email"
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-slate-900"
               />
             </div>
 
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium text-slate-700"
-                >
+                <label htmlFor="password" className="text-sm font-medium text-slate-700">
                   Password
                 </label>
-
                 <button
                   type="button"
                   onClick={onForgotPassword}
@@ -100,13 +123,10 @@ export default function Login({
                   id="password"
                   type={showPassword ? "text" : "password"}
                   required
+                  defaultValue="demo_password"
                   placeholder="Enter your password"
-                  style={{
-                    color: "#0f172a",
-                  }}
                   className="w-full px-4 py-3 pr-16 text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
                 />
-
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -119,16 +139,8 @@ export default function Login({
 
             {/* Remember Me */}
             <div className="flex items-center gap-2">
-              <input
-                id="remember"
-                type="checkbox"
-                className="w-4 h-4 accent-indigo-600"
-              />
-
-              <label
-                htmlFor="remember"
-                className="text-sm text-slate-600"
-              >
+              <input id="remember" type="checkbox" className="w-4 h-4 accent-indigo-600" />
+              <label htmlFor="remember" className="text-sm text-slate-600">
                 Remember me
               </label>
             </div>
@@ -136,9 +148,10 @@ export default function Login({
             {/* Login Button */}
             <button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition"
+              disabled={isLoading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition flex justify-center items-center"
             >
-              Login
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Login"}
             </button>
 
           </form>
@@ -160,7 +173,6 @@ export default function Login({
         <p className="text-center text-xs text-slate-400 mt-6">
           © 2026 TenderIQ
         </p>
-
       </div>
     </div>
   );

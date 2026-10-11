@@ -1,11 +1,57 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, Shield, Loader2, Upload, FileText, Trash2, Building, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
-import { getTenders, PaginatedTenders, Tender, uploadDocument } from '../api';
+import { getTenders, PaginatedTenders, Tender, uploadDocument, loginLocalDemo } from '../api';
 import { TenderEvaluation } from './TenderEvaluation';
 import { OrganizationProfile } from './OrganizationProfile';
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'pipeline' | 'profile'>('feed');
+  // --- AUTO-LOGIN LOCAL DEMO TOKEN ---
+  useEffect(() => {
+    if (!localStorage.getItem('accessToken')) {
+      loginLocalDemo().then(res => {
+        if (res && res.accessToken) {
+          localStorage.setItem('accessToken', res.accessToken);
+          if (res.organization?.id) {
+            localStorage.setItem('activeOrganizationId', res.organization.id);
+          }
+          window.location.reload();
+        }
+      }).catch(err => console.error('Auto-login failed:', err));
+    }
+  }, []);
+
+  // --- STATE PERSISTENCE FIX ---
+  const [activeTab, setActiveTab] = useState<'feed' | 'pipeline' | 'profile'>(() => {
+    return (sessionStorage.getItem('dashboard_activeTab') as any) || 'feed';
+  });
+
+  const [inspectingTender, setInspectingTender] = useState<Tender | null>(() => {
+    const saved = sessionStorage.getItem('dashboard_inspectingTender');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [selectedTenderObj, setSelectedTenderObj] = useState<Tender | null>(() => {
+    const saved = sessionStorage.getItem('dashboard_selectedTenderObj');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [uploadedFile, setUploadedFile] = useState<string | null>(() => {
+    return sessionStorage.getItem('dashboard_uploadedFile') || null;
+  });
+
+  const [documentId, setDocumentId] = useState<string | undefined>(() => {
+    return sessionStorage.getItem('dashboard_documentId') || undefined;
+  });
+
+  const [documentSummary, setDocumentSummary] = useState<string | null>(() => {
+    return sessionStorage.getItem('dashboard_documentSummary') || null;
+  });
+
+  const [documentMetadata, setDocumentMetadata] = useState<any | null>(() => {
+    const saved = sessionStorage.getItem('dashboard_documentMetadata');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [pipelineTenders, setPipelineTenders] = useState<any[]>([]);
   
   // Search, Filter, Pagination State
@@ -14,24 +60,42 @@ export default function Dashboard() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-
-  // Detail View State
-  const [inspectingTender, setInspectingTender] = useState<Tender | null>(null);
-
-  // RAG Document state (Scoped to the inspected tender)
-  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
-  const [documentId, setDocumentId] = useState<string | undefined>(undefined);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  
-  // P1.9 Document Intelligence State
-  const [documentSummary, setDocumentSummary] = useState<string | null>(null);
-  const [documentMetadata, setDocumentMetadata] = useState<any | null>(null);
 
-  // Evaluation Navigation State
-  const [selectedTenderObj, setSelectedTenderObj] = useState<Tender | null>(null);
-
-  // Extract authenticated organization context dynamically
   const authOrgId = localStorage.getItem('activeOrganizationId') || '';
+
+  // --- PERSISTENCE SYNCHRONIZATION ---
+  useEffect(() => { sessionStorage.setItem('dashboard_activeTab', activeTab); }, [activeTab]);
+  
+  useEffect(() => {
+    if (inspectingTender) sessionStorage.setItem('dashboard_inspectingTender', JSON.stringify(inspectingTender));
+    else sessionStorage.removeItem('dashboard_inspectingTender');
+  }, [inspectingTender]);
+
+  useEffect(() => {
+    if (selectedTenderObj) sessionStorage.setItem('dashboard_selectedTenderObj', JSON.stringify(selectedTenderObj));
+    else sessionStorage.removeItem('dashboard_selectedTenderObj');
+  }, [selectedTenderObj]);
+
+  useEffect(() => {
+    if (documentId) sessionStorage.setItem('dashboard_documentId', documentId);
+    else sessionStorage.removeItem('dashboard_documentId');
+  }, [documentId]);
+
+  useEffect(() => {
+    if (uploadedFile) sessionStorage.setItem('dashboard_uploadedFile', uploadedFile);
+    else sessionStorage.removeItem('dashboard_uploadedFile');
+  }, [uploadedFile]);
+
+  useEffect(() => {
+    if (documentSummary) sessionStorage.setItem('dashboard_documentSummary', documentSummary);
+    else sessionStorage.removeItem('dashboard_documentSummary');
+  }, [documentSummary]);
+
+  useEffect(() => {
+    if (documentMetadata) sessionStorage.setItem('dashboard_documentMetadata', JSON.stringify(documentMetadata));
+    else sessionStorage.removeItem('dashboard_documentMetadata');
+  }, [documentMetadata]);
 
   // Debounce search input
   useEffect(() => {
@@ -39,7 +103,6 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch Database Tenders for the Feed
   const fetchFeed = useCallback(async () => {
     setIsLoadingFeed(true);
     const data = await getTenders({ search: debouncedSearch, page, limit: 10 });
@@ -48,15 +111,14 @@ export default function Dashboard() {
   }, [debouncedSearch, page]);
 
   useEffect(() => {
-    if (activeTab === 'feed') {
-      // Run the live CPPP sync in the background first
+    if (activeTab === 'feed' && authOrgId) {
       fetch(`http://localhost:4000/organizations/${authOrgId}/tenders/sync-live`)
         .catch(() => console.log('Live sync warming up...'))
         .finally(() => {
           fetchFeed();
         });
     }
-    if (activeTab === 'pipeline') {
+    if (activeTab === 'pipeline' && authOrgId) {
       fetchPipeline();
     }
   }, [authOrgId, activeTab, fetchFeed]);
@@ -93,7 +155,6 @@ export default function Dashboard() {
       if (result && result.status === 'READY') {
         setUploadedFile(result.filename);
         setDocumentId(result.id);
-        // P1.9 Populate Document Intelligence
         setDocumentSummary(result.documentSummary || null);
         setDocumentMetadata(result.metadata || null);
       } else if (result && result.status === 'NO_EXTRACTABLE_TEXT') {
@@ -139,7 +200,7 @@ export default function Dashboard() {
     setDocumentMetadata(null);
   };
 
-  // View: Evaluation Dashboard (P1.5)
+  // View: Evaluation Dashboard
   if (selectedTenderObj) {
     return (
       <div className="bg-gray-100 min-h-screen py-8">
@@ -148,7 +209,7 @@ export default function Dashboard() {
             onClick={() => setSelectedTenderObj(null)}
             className="text-blue-600 hover:text-blue-800 font-medium flex items-center bg-white px-4 py-2 rounded shadow-sm border border-gray-200"
           >
-            â† Back to Details
+            ← Back to Details
           </button>
         </div>
         <TenderEvaluation 
@@ -161,12 +222,12 @@ export default function Dashboard() {
     );
   }
 
-  // View: Tender Detail Inspector (P1.8 + P1.9)
+  // View: Tender Detail Inspector
   if (inspectingTender) {
     return (
       <div className="max-w-5xl mx-auto p-6 space-y-6 mt-6">
         <button onClick={closeInspector} className="text-blue-600 hover:underline mb-4 inline-block">
-          â† Back to Search Feed
+          ← Back to Search Feed
         </button>
         
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
@@ -221,7 +282,6 @@ export default function Dashboard() {
                   </button>
                 </div>
 
-                {/* P1.9 Document Intelligence Panel */}
                 {documentSummary && (
                   <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm mt-4">
                     <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
@@ -254,7 +314,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 relative">
-      {/* Top Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
@@ -277,7 +336,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Navigation Tabs & Search */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/50 border border-slate-800 p-4 rounded-xl">
         <div className="flex space-x-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
           <button
@@ -326,7 +384,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Tab Views */}
       {activeTab === 'feed' && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-800 flex justify-between items-center">
@@ -368,7 +425,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Pagination Controls */}
           {tendersData && tendersData.totalPages > 1 && (
             <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50">
               <span className="text-xs text-slate-400">Page {tendersData.page} of {tendersData.totalPages} ({tendersData.total} total)</span>
@@ -413,7 +469,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <h4 className="text-sm font-medium text-white">{item.tenderTitle && item.tenderTitle !== 'Untitled Tender' ? item.tenderTitle : 'Supply & Installation of IoT Wildlife Monitoring Cameras'}</h4>
-                    <p className="text-xs text-slate-400">Estimated Value: â‚¹{Number(item.estimatedValue || 4500000).toLocaleString()}</p>
+                    <p className="text-xs text-slate-400">Estimated Value: ₹{Number(item.estimatedValue || 4500000).toLocaleString()}</p>
                   </div>
                   <div className="flex items-center space-x-3">
                     <button

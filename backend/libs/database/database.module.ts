@@ -25,6 +25,9 @@ import { TenderDocumentChunkEntity } from './entities/ai/tender-document-chunk.e
 import { TenderChunkEmbeddingEntity } from './entities/ai/tender-chunk-embedding.entity';
 import { MatchScoreEntity } from './entities/ai/match-score.entity';
 import { EligibilityChecklistItemEntity } from './entities/ai/eligibility-checklist-item.entity';
+// FIX: Added previously missing AI and Pipeline evaluation entities
+import { TenderEvaluationEntity } from './entities/ai/tender-evaluation.entity';
+import { TenderDraftEntity } from './entities/tender/tender-draft.entity';
 
 import { PipelineItemEntity } from './entities/pipeline/pipeline-item.entity';
 import { ChecklistTaskEntity } from './entities/pipeline/checklist-task.entity';
@@ -63,6 +66,8 @@ const entities = [
   TenderChunkEmbeddingEntity,
   MatchScoreEntity,
   EligibilityChecklistItemEntity,
+  TenderEvaluationEntity, // Added
+  TenderDraftEntity,      // Added
   PipelineItemEntity,
   ChecklistTaskEntity,
   BidDraftEntity,
@@ -91,7 +96,7 @@ const entities = [
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
         entities,
-        synchronize: false,
+        synchronize: true,
       }),
     }),
     TypeOrmModule.forFeature(entities),

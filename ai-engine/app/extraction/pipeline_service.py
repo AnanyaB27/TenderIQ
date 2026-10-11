@@ -1,4 +1,5 @@
 import io
+import os
 import uuid
 import logging
 from pypdf import PdfReader
@@ -59,12 +60,12 @@ class DocumentPipelineService:
             if not chunks:
                 return {"status": "NO_EXTRACTABLE_TEXT", "extracted_text": "", "page_count": page_count}
 
-            # 3. Embeddings (Handles your local fallback gracefully)
+            # 3. Embeddings (Handles local fallback gracefully)
             texts_to_embed = [chunk["content"] for chunk in chunks]
             if self.embedding_client:
                 embeddings = await self.embedding_client.embed_batch(texts_to_embed)
             else:
-                # Absolute worst-case fallback to prevent demo crash
+                # This should no longer execute now that the router injects the client
                 logger.warning("No embedding client found, using zero-vectors for demo.")
                 embeddings = [[0.0] * 768 for _ in texts_to_embed]
 
@@ -101,21 +102,22 @@ class DocumentPipelineService:
 
             await self.db.commit()
 
-            # 5. Gemini Structured Summary (Bulletproof Fallback Chain)
+            # 5. Gemini Structured Summary
             structured_summary = "Summary generation skipped."
             structured_metadata = {}
-            
             full_text = "\n".join(texts_to_embed[:10]) # Limit context to avoid token limits
             
-            # Exhaustive fallback chain covering newest 2.0 models, all 1.5 aliases, and the 1.0 legacy model
+            # FIX: Explicitly configure the Google SDK with the environment API key
+            api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
+            if api_key:
+                genai.configure(api_key=api_key)
+            else:
+                logger.warning("GOOGLE_API_KEY is missing. Summary generation will fail.")
+            
             models_to_try = [
-                'gemini-2.0-flash',
-                'gemini-2.0-flash-lite-preview-02-05',
                 'gemini-1.5-flash',
                 'models/gemini-1.5-flash',
-                'gemini-1.5-flash-latest',
-                'gemini-1.5-pro',
-                'gemini-pro'
+                'gemini-1.5-flash-latest'
             ]
             
             for model_name in models_to_try:
@@ -124,12 +126,11 @@ class DocumentPipelineService:
                     resp = model.generate_content(f"Summarize this tender briefly: {full_text}")
                     structured_summary = resp.text
                     logger.info(f"Model {model_name} succeeded.")
-                    break # Success, break out of loop
+                    break
                 except Exception as e:
                     logger.warning(f"Model {model_name} failed: {str(e)}")
                     continue
             else:
-                # If the loop finishes without breaking (all models failed)
                 logger.warning("All Gemini models failed. Using deterministic fallback summary for Demo.")
                 structured_summary = "AI Summary unavailable due to API limits or SDK mismatch. Tender successfully parsed and vectorized."
 

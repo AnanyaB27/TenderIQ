@@ -1,14 +1,19 @@
 import logging
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# Import your database session dependency (ensure this path is correct for your project)
+from app.db.session import get_session
 from app.matching.match_service import MatchService, DocumentNotProcessedError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-def get_match_service():
-    return MatchService()
+# Inject the DB session into the MatchService
+def get_match_service(db: AsyncSession = Depends(get_session)):
+    return MatchService(db=db)
 
 @router.post("/{org_id}/match")
 @router.post("/internal/orgs/{org_id}/match")
@@ -19,16 +24,18 @@ async def evaluate_tender_match(
 ):
     try:
         payload = await request.json()
-        document_id = payload.get("document_id", "demo-doc-id")
+        document_id = payload.get("document_id")
         org_profile_text = payload.get("org_profile_text", "")
         
-        # Call the service to get the raw dictionary
+        if not document_id:
+            return JSONResponse(status_code=400, content={"detail": "document_id is required"})
+        
+        # Execute the real evaluation
         result = await service.evaluate_tender(
             document_id=document_id, 
             org_profile_text=org_profile_text
         )
         
-        # Return a direct JSONResponse to bypass strict Pydantic model validation entirely
         return JSONResponse(content=result)
         
     except Exception as e:

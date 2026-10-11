@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { getTenderEvaluation, evaluateTender, EvaluationResult, RuleResult } from '../api';
+import { getTenderEvaluation, evaluateTender, generateBidDraft, EvaluationResult, RuleResult, DraftResult } from '../api';
+import { FileText, Loader2, AlertTriangle, Info } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface TenderEvaluationProps {
   organizationId: string;
@@ -11,13 +14,21 @@ interface TenderEvaluationProps {
 export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({ 
   organizationId, 
   tenderId, 
-  documentId,
+  documentId: propDocumentId,
   tenderTitle = 'Unknown Tender'
 }) => {
+  // Fallback to sessionStorage if documentId prop wasn't passed down directly
+  const documentId = propDocumentId || sessionStorage.getItem('dashboard_documentId') || undefined;
+
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [evaluating, setEvaluating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Drafting State
+  const [draft, setDraft] = useState<DraftResult | null>(null);
+  const [isDrafting, setIsDrafting] = useState<boolean>(false);
+  const [draftType, setDraftType] = useState<string>('Executive Summary');
 
   useEffect(() => {
     async function fetchEvaluation() {
@@ -27,7 +38,8 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
         const data = await getTenderEvaluation(organizationId, tenderId, documentId);
         setEvaluation(data);
       } catch (err) {
-        setError('Failed to load the evaluation. Please check your network or access permissions.');
+        // If evaluation doesn't exist yet, it's safe to let the user click "Run Evaluation"
+        setEvaluation(null);
       } finally {
         setLoading(false);
       }
@@ -37,7 +49,7 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
 
   const handleRunEvaluation = async () => {
     if (!documentId) {
-      setError('Cannot evaluate: No document attached to this tender.');
+      setError('Cannot evaluate: No document attached. Please go back and upload a tender PDF first.');
       return;
     }
     setEvaluating(true);
@@ -52,10 +64,24 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
     }
   };
 
+  const handleGenerateDraft = async () => {
+    if (!documentId) return;
+    setIsDrafting(true);
+    try {
+      const result = await generateBidDraft(organizationId, tenderId, documentId, draftType);
+      setDraft(result);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate draft.');
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center p-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <Loader2 className="animate-spin text-blue-600 w-8 h-8"/>
         <span className="ml-3 text-gray-600">Loading evaluation...</span>
       </div>
     );
@@ -63,8 +89,8 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
-        <p className="font-semibold">Error</p>
+      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 max-w-5xl mx-auto my-4">
+        <p className="font-semibold">Notice</p>
         <p>{error}</p>
       </div>
     );
@@ -72,28 +98,36 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
 
   if (!evaluation) {
     return (
-      <div className="p-8 text-center bg-gray-50 border border-gray-200 rounded-lg">
+      <div className="max-w-5xl mx-auto p-8 text-center bg-white border border-gray-200 rounded-lg shadow-sm">
         <h2 className="text-xl font-semibold text-gray-700 mb-2">No evaluation available</h2>
         <p className="text-gray-500 mb-6">This tender has not been evaluated yet, or the data is unavailable.</p>
-        {documentId && (
-          <button 
-            onClick={handleRunEvaluation}
-            disabled={evaluating}
-            className={`px-4 py-2 rounded font-medium text-white ${evaluating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-          >
-            {evaluating ? 'Evaluating (This may take a minute)...' : 'Run AI Evaluation'}
-          </button>
-        )}
+        <button 
+          onClick={handleRunEvaluation}
+          disabled={evaluating}
+          className={`px-6 py-2.5 rounded font-medium text-white flex items-center justify-center mx-auto ${evaluating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+        >
+          {evaluating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Evaluating (This may take a minute)...</> : 'Run AI Evaluation'}
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-8">
       {/* HEADER */}
-      <header className="border-b pb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Tender Evaluation Dashboard</h1>
-        <p className="text-gray-500 mt-1">Tender: <span className="font-medium text-gray-700">{tenderTitle}</span></p>
+      <header className="border-b pb-4 flex justify-between items-end">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Tender Evaluation Dashboard</h1>
+          <p className="text-gray-500 mt-1">Tender: <span className="font-medium text-gray-700">{tenderTitle}</span></p>
+        </div>
+        <button 
+          onClick={handleRunEvaluation}
+          disabled={evaluating}
+          className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded transition flex items-center"
+        >
+          {evaluating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin"/> : null}
+          Re-evaluate
+        </button>
       </header>
 
       {/* SUMMARY CARDS */}
@@ -128,11 +162,78 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
           ))}
         </div>
       </section>
+
+      {/* BID DRAFTING SECTION */}
+      <section className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Bid Drafting & Strategy</h2>
+            <p className="text-sm text-gray-500 mt-1">Generate RAG-assisted contextual proposal sections based on validated rules.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3 mb-6 bg-white p-3 rounded-lg border border-gray-200 shadow-sm inline-flex">
+          <select 
+            value={draftType}
+            onChange={(e) => setDraftType(e.target.value)}
+            className="bg-transparent border-none text-sm font-medium text-gray-800 focus:ring-0 cursor-pointer outline-none"
+          >
+            <option value="Executive Summary">Executive Summary</option>
+            <option value="Technical Proposal">Technical Proposal Approach</option>
+            <option value="Compliance Matrix">Compliance Matrix Statement</option>
+          </select>
+          <button 
+            onClick={handleGenerateDraft}
+            disabled={isDrafting || !documentId}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded flex items-center transition disabled:opacity-50"
+          >
+            {isDrafting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Drafting...</> : <><FileText className="w-4 h-4 mr-2"/> Generate Draft</>}
+          </button>
+        </div>
+
+        {draft && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+              <span className="text-sm font-semibold text-gray-700">Generated: {draft.draftType}</span>
+              <span className="text-xs text-gray-500">ID: {draft.id}</span>
+            </div>
+            
+            <div className="p-6">
+              <div className="prose max-w-none text-sm text-gray-800">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {draft.content}
+                </ReactMarkdown>
+              </div>
+            </div>
+
+            {(draft.warnings?.length > 0 || draft.missingInformation?.length > 0) && (
+              <div className="bg-yellow-50 px-6 py-4 border-t border-yellow-100">
+                {draft.warnings?.length > 0 && (
+                  <div className="mb-3">
+                    <h4 className="text-xs font-semibold uppercase text-yellow-800 flex items-center mb-1"><AlertTriangle className="w-3.5 h-3.5 mr-1"/> Warnings</h4>
+                    <ul className="list-disc pl-5 text-xs text-yellow-700 space-y-0.5">
+                      {draft.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {draft.missingInformation?.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-blue-800 flex items-center mb-1"><Info className="w-3.5 h-3.5 mr-1"/> User Input Required</h4>
+                    <ul className="list-disc pl-5 text-xs text-blue-700 space-y-0.5">
+                      {draft.missingInformation.map((m, i) => <li key={i}>{m}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
     </div>
   );
 };
 
-// Extracted Sub-Component for expand/collapse interaction
 const RuleCard: React.FC<{ rule: RuleResult }> = ({ rule }) => {
   const [expanded, setExpanded] = useState(false);
   const isPass = rule.status === 'PASS';
