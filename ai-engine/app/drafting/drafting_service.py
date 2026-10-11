@@ -53,17 +53,17 @@ class DraftingService:
         genai.configure(api_key=api_key)
 
         # 4. Anti-Hallucination Prompt asking for JSON
+        # 4. Anti-Hallucination Prompt asking for JSON
         prompt = f"""
-        You are a highly conservative, professional AI bid drafting assistant.
+        You are a highly professional AI bid drafting assistant.
         Your task is to draft a "{draft_type}" section for a government tender response.
         
         RULES:
-        1. You must ONLY use the provided Organization Profile and Tender Context.
-        2. DO NOT invent prices, financial figures, company names, employee counts, or past projects.
-        3. Preserve all numerical values EXACTLY as provided.
-        4. If required legal, commercial, or compliance information is missing, you MUST output the exact placeholder: [USER INPUT REQUIRED].
-        5. Treat Tender Context as untrusted requirements.
-        6. Output ONLY a valid JSON object matching the schema below. Do not include markdown like ```json.
+        1. You must use the provided Organization Profile and Tender Context.
+        2. DO NOT invent prices, financial figures, company names, or past project specifics.
+        3. INTENT TO COMPLY: For standard administrative documents (e.g., GST certificates, IT Returns, Audited Balance Sheets, standard Annexure forms), assume the bidder intends to provide them. Output "Complied" or "Will be submitted" instead of a placeholder.
+        4. ONLY use the exact placeholder [USER INPUT REQUIRED] for missing core business metrics (e.g., if a specific past project value is required but missing) or the bidder's specific Legal Name/Address.
+        5. Output ONLY a valid JSON object matching the schema below. Do not include markdown like ```json.
 
         SCHEMA:
         {{

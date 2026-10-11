@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import google.generativeai as genai
+from app.embeddings.embedding_client import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,27 +22,33 @@ class MatchService:
 
         logger.info(f"Starting real AI evaluation for document: {document_id}")
 
-        # 1. Fetch the actual processed document chunks from PostgreSQL
+        # 1. Generate semantic query vector for evaluation criteria
+        emb_client = EmbeddingClient()
+        query_text = "mandatory eligibility criteria qualifications experience turnover certifications"
+        query_emb_list = await emb_client.embed_batch([query_text])
+        q_emb = query_emb_list[0]
+        vector_str = f"[{','.join(map(str, q_emb))}]"
+
+        # 2. Fetch the MOST RELEVANT document chunks using pgvector cosine distance
         query = text("""
             SELECT id, page_number, section_title, content 
             FROM tender_document_chunks 
             WHERE tender_document_id = :doc_id
-            ORDER BY chunk_index ASC
+            ORDER BY CAST(embedding AS vector) <=> CAST(:q_emb AS vector)
             LIMIT 30
         """)
-        result = await self.db.execute(query, {"doc_id": document_id})
+        result = await self.db.execute(query, {"doc_id": document_id, "q_emb": vector_str})
         chunks = result.fetchall()
 
         if not chunks:
             logger.warning(f"No chunks found for document {document_id}. It may not be processed yet.")
             raise DocumentNotProcessedError("Tender Document has not been fully processed.")
 
-        # 2. Assemble context mapping using simple integer indices
+        # 3. Assemble context mapping using simple integer indices
         context_parts = []
         chunk_map = {}
         
         for idx, c in enumerate(chunks):
-            # FIX: Cast the asyncpg UUID object to a string so it is JSON serializable
             chunk_id = str(c[0])
             page = c[1]
             section = c[2]
@@ -52,14 +59,14 @@ class MatchService:
         
         tender_context = "\n".join(context_parts)
 
-        # 3. Authenticate with Gemini
+        # 4. Authenticate with Gemini
         api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
         if not api_key:
             raise ValueError("GOOGLE_API_KEY is missing. Cannot perform evaluation.")
         
         genai.configure(api_key=api_key)
         
-        # 4. Construct the LLM Prompt
+        # 5. Construct the LLM Prompt
         prompt = f"""
         You are an expert procurement AI. Evaluate the MSME organization's eligibility for the tender based ONLY on the provided context.
         
@@ -100,7 +107,7 @@ class MatchService:
         }}
         """
         
-       # 5. Prioritize stable, currently active Gemini models
+        # 6. Prioritize stable, currently active Gemini models
         models_to_try = [
             'gemini-3.5-flash',
             'gemini-3.1-flash-lite',
@@ -122,7 +129,7 @@ class MatchService:
         if not response:
             raise RuntimeError("All Gemini evaluation models failed (404 Not Found).")
             
-        # 6. Parse the AI Evaluation
+        # 7. Parse the AI Evaluation
         try:
             resp_text = response.text.strip()
             
@@ -133,7 +140,7 @@ class MatchService:
                 
             eval_data = json.loads(resp_text)
             
-            # 7. Hydrate evidence using the integer index mapping
+            # 8. Hydrate evidence using the integer index mapping
             if "ruleResults" in eval_data:
                 for rule in eval_data["ruleResults"]:
                     rule["rule_id"] = rule.get("ruleId", str(uuid.uuid4()))

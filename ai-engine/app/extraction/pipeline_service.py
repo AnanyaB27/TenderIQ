@@ -65,12 +65,10 @@ class DocumentPipelineService:
             if self.embedding_client:
                 embeddings = await self.embedding_client.embed_batch(texts_to_embed)
             else:
-                # This should no longer execute now that the router injects the client
                 logger.warning("No embedding client found, using zero-vectors for demo.")
                 embeddings = [[0.0] * 768 for _ in texts_to_embed]
 
             # 4. Database Persistence
-            # Ensure we delete old chunks for this document to remain idempotent
             await self.db.execute(
                 text("DELETE FROM tender_document_chunks WHERE tender_document_id = :doc_id"),
                 {"doc_id": document_id}
@@ -84,7 +82,6 @@ class DocumentPipelineService:
             """)
 
             for chunk, emb in zip(chunks, embeddings):
-                # pgvector expects a string format like '[0.1, 0.2, ...]'
                 vector_string = f"[{','.join(map(str, emb))}]"
                 
                 await self.db.execute(insert_query, {
@@ -105,19 +102,20 @@ class DocumentPipelineService:
             # 5. Gemini Structured Summary
             structured_summary = "Summary generation skipped."
             structured_metadata = {}
-            full_text = "\n".join(texts_to_embed[:10]) # Limit context to avoid token limits
+            full_text = "\n".join(texts_to_embed[:10]) 
             
-            # FIX: Explicitly configure the Google SDK with the environment API key
             api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
             if api_key:
                 genai.configure(api_key=api_key)
             else:
                 logger.warning("GOOGLE_API_KEY is missing. Summary generation will fail.")
             
+            # FIXED: Migrated to active Gemini models
             models_to_try = [
-                'gemini-1.5-flash',
-                'models/gemini-1.5-flash',
-                'gemini-1.5-flash-latest'
+                'gemini-3.5-flash',
+                'gemini-3.1-flash-lite',
+                'gemini-2.5-flash',
+                'gemini-2.0-flash'
             ]
             
             for model_name in models_to_try:

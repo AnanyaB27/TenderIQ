@@ -4,17 +4,13 @@ const API_BASE_URL = 'http://localhost:4000';
 
 // Centralized auth header generator
 function getAuthHeaders(): HeadersInit {
-  let token = localStorage.getItem('accessToken');
-  if (!token) {
-    // Fallback demo token or bypass string to prevent 401s during evaluation
-    token = 'demo-bypass-token-12345';
-    localStorage.setItem('accessToken', token);
-  }
+  const token = localStorage.getItem('accessToken');
   return {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   };
 }
+
 export interface Citation {
   chunk_id: string;
   document_id: string;

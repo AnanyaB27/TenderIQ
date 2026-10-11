@@ -155,7 +155,7 @@ Organization Factual Profile:
       throw new InternalServerErrorException(`AI Engine Evaluation Failed: ${error.message}`);
     }
 
-    // Safely extract arrays handling both camelCase and snake_case
+    // Safely extract arrays handling both camelCase and snake_case[cite: 13]
     const ruleResults: RuleResult[] = evaluationResult?.ruleResults || evaluationResult?.rule_results || [];
     const evidenceCoverage: number = evaluationResult?.evidenceCoverage ?? evaluationResult?.evidence_coverage ?? 100.0;
     
@@ -269,19 +269,18 @@ Organization Factual Profile:
 
       await evalRepo.save(evaluation);
     } catch (error: any) {
-      // THE ULTIMATE DEMO FIX: We catch the database error and DO NOT crash.
-      console.warn(`⚠️ [DEMO MODE] Skipping DB persistence. Returning AI data directly to frontend. Reason: ${error.message}`);
+      console.error(`Database persistence failed: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to save evaluation results: ${error.message}`);
     }
 
-    // ALWAYS RETURN the payload so the frontend can render the dashboard
     return {
       tenderId,
       organizationId: orgId,
       documentId: doc.id,
-      matchScore: evaluationResult.matchScore || evaluationResult.match_score || 92,
-      eligibilityStatus: evaluationResult.eligibilityStatus || evaluationResult.eligibility_status || 'High Match',
+      matchScore: evaluationResult.matchScore || evaluationResult.match_score || 0,
+      eligibilityStatus: evaluationResult.eligibilityStatus || evaluationResult.eligibility_status || 'Unknown',
       evidenceCoverage: evidenceCoverage,
-      summary: evaluationResult.summary || 'Summary generated.',
+      summary: evaluationResult.summary || 'No summary provided by AI.',
       gaps: evaluationResult.gaps || [],
       recommendations: evaluationResult.recommendations || [],
       ruleResults: ruleResults,
