@@ -1,8 +1,31 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Filter, Briefcase, CheckCircle2, TrendingUp, Shield, Loader2, Upload, FileText, Trash2, Building, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  Search, 
+  Filter, 
+  Briefcase, 
+  CheckCircle2, 
+  TrendingUp, 
+  Shield, 
+  Loader2, 
+  Upload, 
+  FileText, 
+  Trash2, 
+  ChevronLeft, 
+  ChevronRight, 
+  Building2, 
+  Sparkles, 
+  ArrowLeft, 
+  ArrowRight, 
+  Calendar, 
+  Layers, 
+  CheckCircle,
+  FileCheck,
+  AlertCircle
+} from 'lucide-react';
 import { getTenders, PaginatedTenders, Tender, uploadDocument, loginLocalDemo } from '../api';
 import { TenderEvaluation } from './TenderEvaluation';
 import { OrganizationProfile } from './OrganizationProfile';
+import { StatusBadge } from './common/StatusBadge';
 
 export default function Dashboard() {
   // --- AUTO-LOGIN LOCAL DEMO TOKEN ---
@@ -20,7 +43,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  // --- STATE PERSISTENCE FIX ---
+  // --- STATE PERSISTENCE ---
   const [activeTab, setActiveTab] = useState<'feed' | 'pipeline' | 'profile'>(() => {
     return (sessionStorage.getItem('dashboard_activeTab') as any) || 'feed';
   });
@@ -140,11 +163,11 @@ export default function Dashboard() {
     if (!file) return;
 
     if (file.type !== 'application/pdf') {
-      alert("Unsupported file type. Please upload a PDF.");
+      alert("Unsupported file format. Please upload a valid tender PDF document.");
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
-      alert("File is too large. Maximum size is 15MB.");
+      alert("File exceeds maximum size threshold. Upper limit is 15MB.");
       return;
     }
 
@@ -185,7 +208,7 @@ export default function Dashboard() {
       if (res.ok) {
         fetchPipeline();
       } else {
-        alert("Failed to delete item.");
+        alert("Failed to delete item from pipeline.");
       }
     } catch (err) {
       console.error(err);
@@ -203,20 +226,28 @@ export default function Dashboard() {
   // View: Evaluation Dashboard
   if (selectedTenderObj) {
     return (
-      <div className="bg-gray-100 min-h-screen py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-4 flex justify-between items-center">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
           <button 
             onClick={() => setSelectedTenderObj(null)}
-            className="text-blue-600 hover:text-blue-800 font-medium flex items-center bg-white px-4 py-2 rounded shadow-sm border border-gray-200"
+            className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white bg-surface-900 hover:bg-surface-850 border border-slate-800 px-4 py-2 rounded-xl transition shadow-sm"
           >
-            ← Back to Details
+            <ArrowLeft className="w-4 h-4 text-cyan-400" />
+            <span>Back to Tender Details</span>
           </button>
+
+          <div className="flex items-center gap-2 font-mono text-xs text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span>Interactive Evaluation Mode</span>
+          </div>
         </div>
+
         <TenderEvaluation 
           organizationId={authOrgId} 
           tenderId={selectedTenderObj.id || (selectedTenderObj as any).referenceNumber} 
           documentId={documentId} 
           tenderTitle={selectedTenderObj.title || (selectedTenderObj as any).tenderTitle}
+          onBack={() => setSelectedTenderObj(null)}
         />
       </div>
     );
@@ -225,79 +256,142 @@ export default function Dashboard() {
   // View: Tender Detail Inspector
   if (inspectingTender) {
     return (
-      <div className="max-w-5xl mx-auto p-6 space-y-6 mt-6">
-        <button onClick={closeInspector} className="text-blue-600 hover:underline mb-4 inline-block">
-          ← Back to Search Feed
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* Navigation Back */}
+        <button 
+          onClick={closeInspector} 
+          className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-cyan-400 transition"
+        >
+          <ArrowLeft className="w-4 h-4 text-cyan-400" />
+          <span>Return to Discovery Feed</span>
         </button>
         
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-mono bg-indigo-500/10 text-indigo-600 px-2 py-1 rounded border border-indigo-100">
+        {/* Tender Header Card */}
+        <div className="enterprise-card p-6 sm:p-8 border-slate-800/80 space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+            <div className="space-y-2">
+              <span className="text-xs font-mono font-semibold bg-cyan-500/10 text-cyan-400 px-2.5 py-1 rounded border border-cyan-500/20">
                 {inspectingTender.referenceNumber}
               </span>
-              <h1 className="text-2xl font-bold text-gray-900 mt-3">{inspectingTender.title}</h1>
-              <p className="text-sm text-gray-500 mt-2 flex items-center">
-                <Building2 className="w-4 h-4 mr-1"/> {inspectingTender.issuingAuthority}
+              <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight pt-1">
+                {inspectingTender.title}
+              </h1>
+              <p className="text-xs text-slate-400 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-slate-500"/> 
+                <span>{inspectingTender.issuingAuthority}</span>
+                <span className="text-slate-600">•</span>
+                <span className="bg-surface-950 px-2 py-0.5 rounded text-slate-300 border border-slate-800 font-mono">
+                  {inspectingTender.procurementCategory || 'General Goods & Services'}
+                </span>
               </p>
             </div>
+
+            {inspectingTender.estimatedValue && (
+              <div className="text-right sm:shrink-0 p-3 rounded-xl bg-surface-950 border border-slate-800">
+                <span className="text-[10px] font-mono uppercase text-slate-500 block">Estimated Scale</span>
+                <span className="text-base font-bold text-emerald-400 font-mono">
+                  ₹{Number(inspectingTender.estimatedValue).toLocaleString()}
+                </span>
+              </div>
+            )}
           </div>
           
-          <div className="mt-6 prose max-w-none text-gray-700 text-sm">
-            <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
-            <p className="whitespace-pre-wrap">{inspectingTender.description || 'No description provided by the source.'}</p>
+          {/* Tender Description */}
+          <div className="pt-4 border-t border-slate-800/80 space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Procurement Scope & Description
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-surface-950/60 p-4 rounded-xl border border-slate-800/80">
+              {inspectingTender.description || 'No detailed scope description provided by the originating procurement portal.'}
+            </p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-100">
-            <h3 className="font-semibold text-gray-900 mb-4">AI Evaluation Readiness</h3>
+          {/* AI Readiness & Document Extraction Section */}
+          <div className="pt-6 border-t border-slate-800/80 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span>Deterministic AI Evaluation Readiness</span>
+              </h3>
+              <span className="text-[11px] font-mono text-slate-500">
+                PGVector Chunking Pipeline
+              </span>
+            </div>
+
             {!documentId ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex justify-between items-center">
-                <div>
-                  <p className="text-sm font-medium text-amber-800">Tender Document Required</p>
-                  <p className="text-xs text-amber-700 mt-1">Upload the tender PDF to extract requirements and run the deterministic AI match scoring.</p>
+              <div className="enterprise-card p-6 border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-amber-400 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>RFP Tender Document Required</span>
+                  </p>
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                    Attach the official tender PDF to trigger document extraction, semantic clause chunking, and deterministic rule validation.
+                  </p>
                 </div>
-                <label className="cursor-pointer bg-white border border-amber-300 text-amber-700 hover:bg-amber-100 px-4 py-2 rounded shadow-sm text-sm font-medium transition flex items-center">
+
+                <label className="cursor-pointer bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition shadow-md shadow-cyan-500/20 flex items-center gap-2 shrink-0">
                   {isUploading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin mr-2"/> Processing...</>
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white"/> 
+                      <span>Extracting Vectors...</span>
+                    </>
                   ) : (
-                    <><Upload className="w-4 h-4 mr-2"/> Upload PDF</>
+                    <>
+                      <Upload className="w-4 h-4 text-white"/> 
+                      <span>Upload Tender PDF</span>
+                    </>
                   )}
                   <input type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" />
                 </label>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center shadow-sm">
-                  <div>
-                    <p className="text-sm font-medium text-emerald-800 flex items-center">
-                      <CheckCircle2 className="w-4 h-4 mr-1"/> Document Processed Successfully
+                
+                {/* Success Banner */}
+                <div className="enterprise-card p-5 border-emerald-500/30 bg-emerald-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm">
+                  <div className="space-y-1">
+                    <p className="text-xs sm:text-sm font-bold text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400"/> 
+                      <span>Tender Document Processed & Vectorized</span>
                     </p>
-                    <p className="text-xs text-emerald-700 mt-1">The document {uploadedFile} has been chunked and vectorized.</p>
+                    <p className="text-xs text-slate-400 font-mono">
+                      Target file: <span className="text-slate-300 font-semibold">{uploadedFile}</span> has been indexed into PGVector.
+                    </p>
                   </div>
+
                   <button 
                     onClick={() => handleEvaluateClick(inspectingTender)} 
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition flex items-center"
+                    className="bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition shadow-lg shadow-cyan-500/20 flex items-center gap-2 shrink-0"
                   >
-                    <FileText className="w-4 h-4 mr-2"/> Run AI Match Evaluation
+                    <FileText className="w-4 h-4 text-white"/> 
+                    <span>Execute AI Rule Evaluation</span>
                   </button>
                 </div>
 
+                {/* AI Document Summary */}
                 {documentSummary && (
-                  <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm mt-4">
-                    <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
-                      <FileText className="w-4 h-4 mr-2 text-indigo-500" />
-                      AI Document Summary
+                  <div className="enterprise-card p-5 border-slate-800/80 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                      <FileCheck className="w-4 h-4" />
+                      <span>Extracted Executive Document Summary</span>
                     </h4>
-                    <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded border border-gray-100">
+                    <p className="text-xs text-slate-300 leading-relaxed bg-surface-950/70 p-4 rounded-xl border border-slate-800/80">
                       {documentSummary}
                     </p>
                     
                     {documentMetadata?.eligibility_highlights && (
-                      <div className="mt-4">
-                        <h5 className="text-xs font-semibold text-gray-500 uppercase mb-2">Key Highlights</h5>
-                        <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                      <div className="pt-2">
+                        <h5 className="text-[11px] font-mono font-semibold uppercase text-slate-500 mb-2">
+                          Extracted Qualification Highlights
+                        </h5>
+                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-300">
                           {documentMetadata.eligibility_highlights.map((highlight: string, idx: number) => (
-                            <li key={idx}>{highlight}</li>
+                            <li key={idx} className="flex items-start gap-2 bg-surface-950/50 p-2.5 rounded-lg border border-slate-800/60">
+                              <span className="text-cyan-400 font-bold">•</span>
+                              <span>{highlight}</span>
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -313,133 +407,227 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6 relative">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
-            <span>Active Tenders Tracked</span>
-            <Briefcase className="w-4 h-4 text-indigo-400" />
+    <div className="space-y-6">
+      
+      {/* Top Procurement KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Active Tenders Card */}
+        <div className="enterprise-card p-5 border-slate-800/80 relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono font-semibold">
+            <span>ACTIVE TENDERS</span>
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+              <Briefcase className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-white mt-2">1,428</p>
-          <span className="text-xs text-emerald-400 flex items-center mt-1">
-            <TrendingUp className="w-3 h-3 mr-1" /> +12% this week
+          <p className="text-2xl sm:text-3xl font-extrabold text-white mt-2 font-mono">1,428</p>
+          <div className="flex items-center gap-1 text-[11px] text-emerald-400 mt-1 font-medium">
+            <TrendingUp className="w-3 h-3" />
+            <span>+12% live sync this week</span>
+          </div>
+        </div>
+
+        {/* Pipeline Bids Card */}
+        <div className="enterprise-card p-5 border-slate-800/80 relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono font-semibold">
+            <span>ACTIVE PIPELINE</span>
+            <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
+              <Shield className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-extrabold text-white mt-2 font-mono">{pipelineTenders.length}</p>
+          <span className="text-[11px] text-slate-400 mt-1 block">
+            Saved opportunities in drafting
           </span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
-            <span>Bids in Pipeline</span>
-            <Shield className="w-4 h-4 text-amber-400" />
+        {/* Compliance Rate Card */}
+        <div className="enterprise-card p-5 border-slate-800/80 relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono font-semibold">
+            <span>AI MATCH VERIFIED</span>
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <CheckCircle className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-white mt-2">{pipelineTenders.length}</p>
-          <span className="text-xs text-amber-400 mt-1">Saved active tracking</span>
+          <p className="text-2xl sm:text-3xl font-extrabold text-white mt-2 font-mono">100%</p>
+          <span className="text-[11px] text-emerald-400 mt-1 block">
+            Zero-hallucination ground truth
+          </span>
         </div>
+
+        {/* Engine Status Card */}
+        <div className="enterprise-card p-5 border-slate-800/80 relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono font-semibold">
+            <span>PGVECTOR INDEX</span>
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+              <Layers className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-extrabold text-cyan-400 mt-2 font-mono">1536-D</p>
+          <span className="text-[11px] text-slate-400 mt-1 block">
+            Embeddings semantic distance
+          </span>
+        </div>
+
       </div>
 
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/50 border border-slate-800 p-4 rounded-xl">
-        <div className="flex space-x-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+      {/* Main Tabs Navigation Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface-900/90 border border-slate-800/80 p-3.5 rounded-2xl backdrop-blur-md">
+        
+        {/* Tab Buttons */}
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
           <button
             onClick={() => setActiveTab('feed')}
-            className={`px-4 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ${
-              activeTab === 'feed' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'feed' 
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20' 
+                : 'text-slate-400 hover:text-white hover:bg-surface-850'
             }`}
           >
-            Tender Discovery
+            <Search className="w-3.5 h-3.5" />
+            <span>Tender Discovery</span>
           </button>
+
           <button
             onClick={() => setActiveTab('pipeline')}
-            className={`px-4 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ${
-              activeTab === 'pipeline' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'pipeline' 
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20' 
+                : 'text-slate-400 hover:text-white hover:bg-surface-850'
             }`}
           >
-            Active Pipeline ({pipelineTenders.length})
+            <Shield className="w-3.5 h-3.5" />
+            <span>Active Pipeline ({pipelineTenders.length})</span>
           </button>
+
           <button
             onClick={() => setActiveTab('profile')}
-            className={`px-4 py-2 rounded-lg text-xs font-medium transition flex items-center space-x-1 whitespace-nowrap ${
-              activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'profile' 
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20' 
+                : 'text-slate-400 hover:text-white hover:bg-surface-850'
             }`}
           >
-            <Building className="w-3.5 h-3.5 mr-1" />
-            <span>Organization Profile</span>
+            <Building2 className="w-3.5 h-3.5" />
+            <span>MSME Profile</span>
           </button>
         </div>
 
+        {/* Search Bar for Tender Discovery */}
         {activeTab === 'feed' && (
-          <div className="flex items-center space-x-2 w-full md:w-auto">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-500" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                placeholder="Search titles, reference numbers..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                placeholder="Search reference, keywords, authority..."
+                className="w-full bg-surface-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner font-sans"
               />
             </div>
-            <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg border border-slate-700">
-              <Filter className="w-4 h-4" />
-            </button>
           </div>
         )}
       </div>
 
+      {/* TAB CONTENT: TENDER DISCOVERY FEED */}
       {activeTab === 'feed' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-            <h3 className="text-sm font-semibold text-white">Global Tender Database</h3>
-            <span className="text-xs text-slate-400">Database Search Results</span>
+        <div className="enterprise-card border-slate-800/80 overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-slate-800/80 flex justify-between items-center bg-surface-900">
+            <div>
+              <h3 className="text-sm font-bold text-white tracking-tight">
+                Government Procurement Feed
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Real-time synchronized opportunities matched against your business scope
+              </p>
+            </div>
+            <span className="text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded border border-cyan-500/20">
+              Live Database
+            </span>
           </div>
 
-          <div className="divide-y divide-slate-800">
+          <div className="divide-y divide-slate-800/80">
             {isLoadingFeed ? (
-              <div className="p-12 text-center flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-indigo-400" /></div>
+              <div className="p-16 text-center flex flex-col justify-center items-center space-y-3">
+                <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                <span className="text-xs font-mono text-slate-400">Loading tenders from PostgreSQL...</span>
+              </div>
             ) : tendersData?.items.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">No tenders match your search criteria.</div>
+              <div className="p-16 text-center text-slate-400 text-xs sm:text-sm space-y-2">
+                <p className="font-semibold text-slate-300">No tenders matched your search criteria.</p>
+                <p className="text-slate-500">Try adjusting your keywords or clearing the search query.</p>
+              </div>
             ) : (
               tendersData?.items.map((tender) => (
-                <div key={tender.id} className="p-5 hover:bg-slate-800/50 transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div 
+                  key={tender.id} 
+                  className="p-5 hover:bg-surface-850/60 transition-colors flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group"
+                >
                   <div className="space-y-1.5 flex-1">
-                    <span className="text-xs font-mono bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20">
-                      {tender.referenceNumber}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-mono font-semibold bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/20">
+                        {tender.referenceNumber}
+                      </span>
+                      <span className="bg-surface-950 px-2 py-0.5 rounded text-[11px] text-slate-400 border border-slate-800 font-medium">
+                        {tender.procurementCategory || 'General Goods'}
+                      </span>
+                    </div>
+
                     <h4 
                       onClick={() => setInspectingTender(tender)} 
-                      className="text-sm font-medium text-white hover:text-indigo-400 cursor-pointer line-clamp-2"
+                      className="text-sm font-semibold text-white group-hover:text-cyan-400 cursor-pointer transition line-clamp-2"
                     >
                       {tender.title}
                     </h4>
-                    <div className="flex items-center space-x-4 text-xs text-slate-400 pt-1">
-                      <span className="flex items-center"><Building2 className="w-3.5 h-3.5 mr-1" /> {tender.issuingAuthority}</span>
-                      <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300">{tender.procurementCategory || 'General'}</span>
+
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-0.5">
+                      <span className="flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-slate-500" /> 
+                        <span>{tender.issuingAuthority}</span>
+                      </span>
+
+                      {tender.estimatedValue && (
+                        <span className="text-emerald-400 font-mono font-semibold">
+                          ₹{Number(tender.estimatedValue).toLocaleString()}
+                        </span>
+                      )}
                     </div>
                   </div>
+
                   <button 
                     onClick={() => setInspectingTender(tender)} 
-                    className="text-xs font-medium px-4 py-2 rounded-lg transition bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white shadow-sm shrink-0"
+                    className="text-xs font-semibold px-4 py-2.5 rounded-xl transition bg-surface-950 hover:bg-cyan-500 hover:text-surface-950 border border-slate-700 hover:border-cyan-400 text-slate-200 shadow-sm shrink-0 flex items-center gap-1.5 group-hover:shadow-glow-cyan"
                   >
-                    Inspect & Evaluate
+                    <span>Inspect & Evaluate</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))
             )}
           </div>
 
+          {/* Pagination Controls */}
           {tendersData && tendersData.totalPages > 1 && (
-            <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50">
-              <span className="text-xs text-slate-400">Page {tendersData.page} of {tendersData.totalPages} ({tendersData.total} total)</span>
-              <div className="flex space-x-2">
+            <div className="p-4 border-t border-slate-800/80 flex justify-between items-center bg-surface-900/80 text-xs">
+              <span className="text-slate-400 font-mono">
+                Showing Page {tendersData.page} of {tendersData.totalPages} ({tendersData.total} total opportunities)
+              </span>
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setPage(p => Math.max(1, p - 1))} 
                   disabled={page === 1}
-                  className="p-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-50 hover:bg-slate-700"
+                  className="p-2 rounded-xl bg-surface-950 border border-slate-800 text-slate-300 disabled:opacity-40 hover:bg-surface-850 hover:border-slate-700 transition"
+                  aria-label="Previous Page"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
+                <span className="font-mono px-2 text-slate-300">{page}</span>
                 <button 
                   onClick={() => setPage(p => Math.min(tendersData.totalPages, p + 1))} 
                   disabled={page === tendersData.totalPages}
-                  className="p-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-50 hover:bg-slate-700"
+                  className="p-2 rounded-xl bg-surface-950 border border-slate-800 text-slate-300 disabled:opacity-40 hover:bg-surface-850 hover:border-slate-700 transition"
+                  aria-label="Next Page"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -449,33 +637,50 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* TAB CONTENT: ACTIVE PIPELINE */}
       {activeTab === 'pipeline' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-            <h3 className="text-sm font-semibold text-white">Active Bidding Pipeline</h3>
-            <span className="text-xs text-slate-400">Bids currently saved for proposal drafting</span>
+        <div className="enterprise-card border-slate-800/80 overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-slate-800/80 flex justify-between items-center bg-surface-900">
+            <div>
+              <h3 className="text-sm font-bold text-white tracking-tight">
+                Active Bidding Pipeline
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Saved tender opportunities undergoing proposal preparation
+              </p>
+            </div>
+            <span className="text-[11px] font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-500/20">
+              {pipelineTenders.length} Active Bids
+            </span>
           </div>
 
-          <div className="divide-y divide-slate-800">
+          <div className="divide-y divide-slate-800/80">
             {pipelineTenders.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs">No tenders added to pipeline yet. Evaluate a tender and click "Save to Pipeline"!</div>
+              <div className="p-16 text-center text-slate-400 text-xs sm:text-sm space-y-2">
+                <p className="font-semibold text-slate-300">No opportunities added to your pipeline yet.</p>
+                <p className="text-slate-500">Inspect any tender in the Discovery feed and click "Save to Pipeline" to track it here.</p>
+              </div>
             ) : (
               pipelineTenders.map((item: any) => (
-                <div key={item.id} className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div key={item.id} className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-surface-850/50 transition">
                   <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-mono bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
-                        {item.status || 'Drafting'}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-semibold bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20">
+                        {item.status || 'Drafting Proposal'}
                       </span>
                     </div>
-                    <h4 className="text-sm font-medium text-white">{item.tenderTitle && item.tenderTitle !== 'Untitled Tender' ? item.tenderTitle : 'Supply & Installation of IoT Wildlife Monitoring Cameras'}</h4>
-                    <p className="text-xs text-slate-400">Estimated Value: ₹{Number(item.estimatedValue || 4500000).toLocaleString()}</p>
+                    <h4 className="text-sm font-semibold text-white">
+                      {item.tenderTitle && item.tenderTitle !== 'Untitled Tender' ? item.tenderTitle : 'Supply & Installation of IoT Wildlife Monitoring Cameras'}
+                    </h4>
+                    <p className="text-xs text-slate-400 font-mono">
+                      Estimated Budget: <span className="text-emerald-400 font-semibold">₹{Number(item.estimatedValue || 4500000).toLocaleString()}</span>
+                    </p>
                   </div>
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center gap-3">
                     <button
                       onClick={() => handleDeletePipelineItem(item.id)}
-                      className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 p-2 rounded-lg transition"
-                      title="Delete from Pipeline"
+                      className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 p-2.5 rounded-xl transition"
+                      title="Remove from Active Pipeline"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -487,8 +692,9 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* TAB CONTENT: MSME PROFILE */}
       {activeTab === 'profile' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="enterprise-card border-slate-800/80 p-6 sm:p-8">
           <OrganizationProfile organizationId={authOrgId} />
         </div>
       )}

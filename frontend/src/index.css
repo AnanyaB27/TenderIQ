@@ -3,7 +3,104 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
   body {
-    @apply bg-slate-950 text-slate-50 antialiased selection:bg-indigo-500 selection:text-white;
+    background-color: #070B14;
+    color: #f8fafc;
+    @apply antialiased font-sans min-h-screen;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.06) 0%, transparent 40%),
+      radial-gradient(circle at 90% 20%, rgba(99, 102, 241, 0.04) 0%, transparent 35%);
+    background-attachment: fixed;
+  }
+
+
+  /* Custom subtle scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #070B14;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1C2C52;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #233664;
   }
 }
+
+@layer components {
+  /* Enterprise glass cards */
+  .enterprise-card {
+    background-color: rgba(13, 21, 39, 0.9);
+    @apply border border-slate-800/80 rounded-2xl shadow-card-dark backdrop-blur-md transition-all duration-200;
+  }
+
+  .enterprise-card-hover {
+    @apply hover:border-cyan-500/30 hover:shadow-glow-cyan;
+  }
+  
+  /* Status pill badges */
+  .badge-pass {
+    @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+  .badge-fail {
+    @apply bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+  .badge-amber {
+    @apply bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+  .badge-neutral {
+    @apply bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+}
+
+/* Markdown styling inside dark cards */
+.prose-dark {
+  @apply text-slate-200 leading-relaxed text-sm;
+}
+.prose-dark h1 {
+  @apply text-xl font-bold text-white mt-4 mb-2 pb-1 border-b border-slate-800;
+}
+.prose-dark h2 {
+  @apply text-lg font-bold text-cyan-300 mt-4 mb-2;
+}
+.prose-dark h3 {
+  @apply text-base font-semibold text-slate-100 mt-3 mb-1.5;
+}
+.prose-dark p {
+  @apply mb-3 text-slate-300;
+}
+.prose-dark ul {
+  @apply list-disc pl-5 mb-3 space-y-1 text-slate-300;
+}
+.prose-dark ol {
+  @apply list-decimal pl-5 mb-3 space-y-1 text-slate-300;
+}
+.prose-dark li {
+  @apply text-slate-300;
+}
+.prose-dark strong {
+  @apply font-semibold text-white;
+}
+.prose-dark blockquote {
+  @apply border-l-2 border-cyan-500/60 pl-3 italic text-slate-400 my-2 bg-surface-950/60 py-1 rounded-r;
+}
+.prose-dark code {
+  @apply font-mono text-xs bg-surface-950 px-1.5 py-0.5 rounded text-cyan-300 border border-slate-800;
+}
+.prose-dark table {
+  @apply w-full text-left border-collapse my-3 text-xs;
+}
+.prose-dark th {
+  @apply bg-surface-850 text-slate-300 p-2 border border-slate-800 font-semibold;
+}
+.prose-dark td {
+  @apply p-2 border border-slate-800/80 text-slate-300;
+}

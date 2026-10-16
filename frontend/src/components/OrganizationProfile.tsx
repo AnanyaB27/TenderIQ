@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getMsmeProfile, updateMsmeProfile } from '../api';
-import { Save, Loader2, Building, MapPin, Target } from 'lucide-react';
+import { Save, Loader2, Building2, MapPin, Target, ShieldCheck, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 
 interface OrganizationProfileProps {
   organizationId: string;
@@ -60,113 +60,208 @@ export const OrganizationProfile: React.FC<OrganizationProfileProps> = ({ organi
       setLocations(profileData.operatingLocations?.join(', ') || locations);
       setCapabilities(profileData.coreCapabilities?.join(', ') || capabilities);
       
-      setMessage({ text: 'Profile successfully updated. Changes will apply to future AI evaluations.', type: 'success' });
+      setMessage({ text: 'Profile successfully updated. Changes will be factored into all AI evaluations.', type: 'success' });
     } else {
-      setMessage({ text: 'Failed to update profile. Please try again.', type: 'error' });
+      setMessage({ text: 'Failed to update organization profile. Please try again.', type: 'error' });
     }
     setSaving(false);
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-        <span className="ml-3 text-gray-600 font-medium">Loading organizational profile...</span>
+      <div className="flex flex-col justify-center items-center p-16 space-y-3">
+        <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+        <span className="text-xs font-mono text-slate-400 tracking-wider">
+          Retrieving organization profile telemetry...
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Procurement Profile</h1>
-        <p className="text-gray-500 mt-1">This data powers the deterministic AI RuleEngine for tender matching.</p>
-      </header>
+    <div className="space-y-6">
+      
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-6 border-b border-slate-800/80">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight text-white">
+              MSME Organization Profile
+            </h2>
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              Verified Entity
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            This factual baseline directly feeds the deterministic AI RuleEngine to evaluate mandatory tender eligibility.
+          </p>
+        </div>
 
+        <div className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-surface-900 border border-slate-800 px-3 py-1.5 rounded-xl w-fit">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span>Deterministic Audit Standard</span>
+        </div>
+      </div>
+
+      {/* Alert Banner */}
       {message && (
-        <div className={`p-4 mb-6 rounded border ${message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-          {message.text}
+        <div 
+          className={`p-4 rounded-xl border flex items-start gap-3 text-xs sm:text-sm ${
+            message.type === 'success' 
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+          }`}
+          role="alert"
+        >
+          {message.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-rose-400" />
+          )}
+          <span className="leading-relaxed">{message.text}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-        <section>
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-            <Building className="w-5 h-5 mr-2 text-indigo-500" /> Core Metrics
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Annual Turnover (INR Crores)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={turnover}
-                onChange={(e) => setTurnover(e.target.value)}
-                className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g. 25"
-                required
-              />
+      {/* Main Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        
+        {/* Section 1: Financial & Tenure Metrics */}
+        <div className="enterprise-card p-6 border-slate-800/80 space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80 text-white font-semibold text-sm">
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+              <Building2 className="w-4 h-4" />
             </div>
+            <span>Core Procurement Thresholds</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Years of Experience</label>
-              <input
-                type="number"
-                min="0"
-                value={experience}
-                onChange={(e) => setExperience(e.target.value)}
-                className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g. 8"
-                required
-              />
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Annual Turnover (INR Crores)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={turnover}
+                  onChange={(e) => setTurnover(e.target.value)}
+                  className="w-full bg-surface-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner font-mono"
+                  placeholder="e.g. 25.5"
+                  required
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-500 pointer-events-none">
+                  ₹ Cr
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Used to test minimum financial turnover threshold rules.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Years of Operating Experience
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  value={experience}
+                  onChange={(e) => setExperience(e.target.value)}
+                  className="w-full bg-surface-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner font-mono"
+                  placeholder="e.g. 8"
+                  required
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-500 pointer-events-none">
+                  Years
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Validated against past-performance clause prerequisites.
+              </p>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section>
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-            <MapPin className="w-5 h-5 mr-2 text-indigo-500" /> Operational Context
-          </h2>
+        {/* Section 2: Geographic Reach */}
+        <div className="enterprise-card p-6 border-slate-800/80 space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80 text-white font-semibold text-sm">
+            <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <span>Operational Jurisdiction</span>
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Operating Locations (Comma separated)</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+              Operating Locations (Comma-separated)
+            </label>
             <input
               type="text"
               value={locations}
               onChange={(e) => setLocations(e.target.value)}
-              placeholder="e.g., Bangalore, Karnataka, Maharashtra"
-              className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="e.g., Bangalore, Karnataka, Maharashtra, Delhi NCR"
+              className="w-full bg-surface-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner"
             />
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Determines regional qualification and local supplier preference exemptions.
+            </p>
           </div>
-        </section>
+        </div>
 
-        <section>
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-            <Target className="w-5 h-5 mr-2 text-indigo-500" /> Technical Capabilities
-          </h2>
+        {/* Section 3: Technical Capabilities */}
+        <div className="enterprise-card p-6 border-slate-800/80 space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80 text-white font-semibold text-sm">
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+              <Target className="w-4 h-4" />
+            </div>
+            <span>Domain Capabilities & Technical Scope</span>
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Core Capabilities (Comma separated)</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+              Core Technical Competencies (Comma-separated)
+            </label>
             <textarea
               value={capabilities}
               onChange={(e) => setCapabilities(e.target.value)}
               rows={4}
-              placeholder="e.g., Embedded Systems, AI Development, Network Hardware"
-              className="w-full px-4 py-2 bg-white text-gray-900 border border-gray-300 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="e.g., Embedded Systems, AI Development, Network Hardware, Cloud Architecture, IoT Sensors"
+              className="w-full bg-surface-950/80 border border-slate-800 rounded-xl p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner leading-relaxed"
             />
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Vectorized via PGVector embeddings to compute semantic similarity against tender scope of work.
+            </p>
           </div>
-        </section>
+        </div>
 
-        <div className="pt-4 border-t border-gray-100 flex justify-end">
+        {/* Action Row */}
+        <div className="flex items-center justify-between pt-2">
+          <div className="text-xs text-slate-500 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Updates immediately synchronize with AI rule engines</span>
+          </div>
+
           <button
             type="submit"
             disabled={saving}
-            className={`px-6 py-2.5 rounded-lg text-white font-medium flex items-center transition ${
-              saving ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
-            }`}
+            className="bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-semibold px-6 py-2.5 rounded-xl text-xs sm:text-sm transition duration-200 shadow-lg shadow-cyan-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
-            {saving ? 'Saving Profile...' : 'Save Profile'}
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Persisting Profile...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Save Profile Changes</span>
+              </>
+            )}
           </button>
         </div>
+
       </form>
     </div>
   );

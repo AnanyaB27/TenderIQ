@@ -1,5 +1,6 @@
 import React from 'react';
-import { ShieldAlert, AlertCircle, CheckCircle, HelpCircle } from 'lucide-react';
+import { ShieldAlert, AlertCircle, CheckCircle, HelpCircle, ShieldCheck } from 'lucide-react';
+import { StatusBadge } from './common/StatusBadge';
 
 interface ConfidenceData {
   level: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNAVAILABLE';
@@ -21,58 +22,67 @@ interface EvaluationConfidencePanelProps {
 export const EvaluationConfidencePanel: React.FC<EvaluationConfidencePanelProps> = ({ confidence, riskFlags = [] }) => {
   if (!confidence) return null;
 
-  const levelColor = 
-    confidence.level === 'HIGH' ? 'bg-green-100 text-green-800 border-green-200' :
-    confidence.level === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-    confidence.level === 'LOW' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-    'bg-gray-100 text-gray-800 border-gray-200';
-
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6 mt-6">
-      <div className="flex justify-between items-center border-b pb-4">
+    <div className="enterprise-card p-6 border-slate-800/80 space-y-6 mt-6">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-4 border-b border-slate-800/80">
         <div>
-          <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <ShieldAlert className="w-5 h-5 mr-2 text-indigo-600" /> Evaluation Confidence & Risk Indicators
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Indicates how completely the evaluation is supported by processed evidence. Not a bid-success prediction.
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-cyan-400" />
+            <h2 className="text-base font-bold text-white tracking-tight">
+              Evaluation Confidence & Risk Telemetry
+            </h2>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Indicates evidentiary completeness of processed RFP clauses. Does NOT represent probability of winning.
           </p>
         </div>
-        <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wide ${levelColor}`}>
-          Confidence: {confidence.level}
-        </span>
+        <StatusBadge status={confidence.level} label={`Confidence: ${confidence.level}`} size="md" />
       </div>
 
       {/* Confidence Reasons */}
-      <div>
-        <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Deterministic Assessment Basis</h3>
-        <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+      <div className="space-y-2">
+        <h3 className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">
+          Deterministic Assessment Foundation
+        </h3>
+        <ul className="space-y-1.5 text-xs text-slate-300">
           {confidence.reasons.map((reason, idx) => (
-            <li key={idx}>{reason}</li>
+            <li key={idx} className="flex items-start gap-2 bg-surface-950/60 p-2.5 rounded-lg border border-slate-800/80">
+              <span className="text-cyan-400 font-bold">•</span>
+              <span>{reason}</span>
+            </li>
           ))}
         </ul>
       </div>
 
       {/* Risk Indicators */}
       {riskFlags.length > 0 && (
-        <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Identified Risk Indicators ({riskFlags.length})</h3>
-          <div className="space-y-3">
+        <div className="space-y-3 pt-2">
+          <h3 className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">
+            Identified Risk Indicators ({riskFlags.length})
+          </h3>
+          <div className="space-y-2.5">
             {riskFlags.map((flag, idx) => {
-              const severityColor = 
-                flag.severity === 'HIGH' ? 'bg-red-50 border-red-200 text-red-900' :
-                flag.severity === 'MEDIUM' ? 'bg-amber-50 border-amber-200 text-amber-900' :
-                'bg-blue-50 border-blue-200 text-blue-900';
+              const isHigh = flag.severity === 'HIGH';
+              const isMedium = flag.severity === 'MEDIUM';
 
               return (
-                <div key={idx} className={`p-4 rounded-lg border text-sm ${severityColor}`}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-semibold">{flag.title}</span>
-                    <span className="text-xs font-mono uppercase bg-white/60 px-2 py-0.5 rounded border">
+                <div 
+                  key={idx} 
+                  className={`p-4 rounded-xl border text-xs space-y-1.5 ${
+                    isHigh 
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' 
+                      : isMedium 
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' 
+                        : 'bg-surface-950 border-slate-800 text-slate-300'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-white">{flag.title}</span>
+                    <span className="font-mono text-[10px] uppercase bg-surface-900 px-2 py-0.5 rounded border border-slate-800 text-slate-400">
                       {flag.category} [{flag.severity}]
                     </span>
                   </div>
-                  <p className="text-xs mt-1 opacity-90">{flag.explanation}</p>
+                  <p className="text-[11px] opacity-90 leading-relaxed">{flag.explanation}</p>
                 </div>
               );
             })}
