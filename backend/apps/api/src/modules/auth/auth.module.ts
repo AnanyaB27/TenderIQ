@@ -8,6 +8,7 @@ import { UserEntity } from '../../../../../libs/database/entities/identity/user.
 import { UserOauthIdentityEntity } from '../../../../../libs/database/entities/identity/user-oauth-identity.entity';
 import { OrganizationEntity } from '../../../../../libs/database/entities/identity/organization.entity';
 import { OrganizationMemberEntity } from '../../../../../libs/database/entities/identity/organization-member.entity';
+import { MsmeProfileEntity } from '../../../../../libs/database/entities/identity/msme-profile.entity';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -23,6 +24,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       UserOauthIdentityEntity,
       OrganizationEntity,
       OrganizationMemberEntity,
+      MsmeProfileEntity,
     ]),
 
     PassportModule.register({

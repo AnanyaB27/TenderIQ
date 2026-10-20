@@ -1,4 +1,5 @@
-﻿import {
+﻿
+import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
@@ -13,6 +14,9 @@ export class TenderDocumentEntity {
 
   @Column({ type: 'uuid', name: 'organization_id' })
   organizationId!: string;
+
+  @Column({ type: 'uuid', name: 'tender_id', nullable: true })
+  tenderId!: string | null;
 
   @Column({
     type: 'varchar',
@@ -36,32 +40,16 @@ export class TenderDocumentEntity {
   })
   extractionStatus!: string;
 
-  @Column({
-    type: 'int',
-    name: 'page_count',
-    default: 0,
-  })
+  @Column({ type: 'int', name: 'page_count', default: 0 })
   pageCount!: number;
 
-  @Column({
-    type: 'text',
-    name: 'extracted_text',
-    nullable: true,
-  })
+  @Column({ type: 'text', name: 'extracted_text', nullable: true })
   extractedText!: string | null;
 
-  @Column({
-    type: 'text',
-    name: 'documentSummary',
-    nullable: true,
-  })
+  @Column({ type: 'text', name: 'documentSummary', nullable: true })
   documentSummary!: string | null;
 
-  @Column({
-    type: 'jsonb',
-    name: 'extractedMetadata',
-    nullable: true,
-  })
+  @Column({ type: 'jsonb', name: 'extractedMetadata', nullable: true })
   extractedMetadata!: object | null;
 
   @CreateDateColumn({

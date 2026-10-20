@@ -1,4 +1,6 @@
+
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,6 +9,8 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -16,6 +20,8 @@ import {
 } from '@nestjs/swagger';
 
 import { PipelineItemEntity } from '@app/database/entities/pipeline/pipeline-item.entity';
+import { JwtAuthGuard } from '../../../../../libs/common/guards/jwt-auth.guard';
+import { OrganizationMembershipGuard } from '../../../../../libs/common/guards/organization-membership.guard';
 
 import {
   CreatePipelineItemDto,
@@ -24,6 +30,7 @@ import {
 import { PipelineItemsService } from './pipeline-items.service';
 
 @ApiTags('Pipeline Items')
+@UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
 @Controller('pipeline-items')
 export class PipelineItemsController {
   constructor(
@@ -31,9 +38,7 @@ export class PipelineItemsController {
   ) {}
 
   @Post()
-  @ApiOperation({
-    summary: 'Create a new pipeline item',
-  })
+  @ApiOperation({ summary: 'Create a pipeline item for an organization' })
   @ApiResponse({
     status: 201,
     description: 'Pipeline item created successfully.',
@@ -47,20 +52,28 @@ export class PipelineItemsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Retrieve all pipeline items',
+    summary: 'Retrieve pipeline items for an organization',
   })
   @ApiResponse({
     status: 200,
-    description: 'Pipeline items retrieved successfully.',
+    description: 'Organization pipeline items retrieved successfully.',
     type: [PipelineItemEntity],
   })
-  findAll(): Promise<PipelineItemEntity[]> {
-    return this.pipelineItemsService.findAll();
+  findAll(
+    @Query('organizationId') organizationId: string,
+  ): Promise<PipelineItemEntity[]> {
+    if (!organizationId) {
+      throw new BadRequestException(
+        'organizationId query parameter is required.',
+      );
+    }
+
+    return this.pipelineItemsService.findAll(organizationId);
   }
 
   @Get(':id')
   @ApiOperation({
-    summary: 'Retrieve a pipeline item by ID',
+    summary: 'Retrieve an organization pipeline item by ID',
   })
   @ApiParam({
     name: 'id',
@@ -79,13 +92,20 @@ export class PipelineItemsController {
   })
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query('organizationId') organizationId: string,
   ): Promise<PipelineItemEntity> {
-    return this.pipelineItemsService.findOne(id);
+    if (!organizationId) {
+      throw new BadRequestException(
+        'organizationId query parameter is required.',
+      );
+    }
+
+    return this.pipelineItemsService.findOne(id, organizationId);
   }
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update a pipeline item',
+    summary: 'Update a pipeline item within its organization',
   })
   @ApiParam({
     name: 'id',
@@ -98,20 +118,23 @@ export class PipelineItemsController {
     description: 'Pipeline item updated successfully.',
     type: PipelineItemEntity,
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Pipeline item not found.',
-  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query('organizationId') organizationId: string,
     @Body() dto: UpdatePipelineItemDto,
   ): Promise<PipelineItemEntity> {
-    return this.pipelineItemsService.update(id, dto);
+    if (!organizationId) {
+      throw new BadRequestException(
+        'organizationId query parameter is required.',
+      );
+    }
+
+    return this.pipelineItemsService.update(id, organizationId, dto);
   }
 
   @Delete(':id')
   @ApiOperation({
-    summary: 'Delete a pipeline item',
+    summary: 'Delete a pipeline item within its organization',
   })
   @ApiParam({
     name: 'id',
@@ -123,16 +146,16 @@ export class PipelineItemsController {
     status: 200,
     description: 'Pipeline item deleted successfully.',
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Pipeline item not found.',
-  })
   remove(
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<{
-    success: boolean;
-    message: string;
-  }> {
-    return this.pipelineItemsService.remove(id);
+    @Query('organizationId') organizationId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    if (!organizationId) {
+      throw new BadRequestException(
+        'organizationId query parameter is required.',
+      );
+    }
+
+    return this.pipelineItemsService.remove(id, organizationId);
   }
 }

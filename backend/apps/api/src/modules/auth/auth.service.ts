@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 
 import { UserEntity } from '../../../../../libs/database/entities/identity/user.entity';
 import {
@@ -18,7 +19,8 @@ import {
   OrganizationRole,
 } from '../../../../../libs/database/entities/identity/organization-member.entity';
 import { UserOauthIdentityEntity } from '../../../../../libs/database/entities/identity/user-oauth-identity.entity';
-import { AuthResponseDto } from './dto/auth.dto';
+import { MsmeProfileEntity } from '../../../../../libs/database/entities/identity/msme-profile.entity';
+import { AuthResponseDto, RegisterLocalDto, LoginLocalDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -36,6 +38,9 @@ export class AuthService {
 
     @InjectRepository(OrganizationMemberEntity)
     private readonly memberRepository: Repository<OrganizationMemberEntity>,
+
+    @InjectRepository(MsmeProfileEntity)
+    private readonly profileRepository: Repository<MsmeProfileEntity>,
 
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -187,6 +192,98 @@ export class AuthService {
     response.organization = {
       id: organization.id,
       name: organization.name,
+    };
+
+    return response;
+  }
+
+  async registerLocal(dto: RegisterLocalDto): Promise<AuthResponseDto> {
+    const normalizedEmail = dto.email.toLowerCase();
+
+    const existingUser = await this.userRepository.findOne({ where: { email: normalizedEmail } });
+    if (existingUser) {
+      throw new ForbiddenException('User with this email already exists.');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    let user = this.userRepository.create({
+      email: normalizedEmail,
+      password: hashedPassword,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      isActive: true,
+      lastLoginAt: new Date(),
+    });
+    user = await this.userRepository.save(user);
+
+    let organization = this.organizationRepository.create({
+      name: dto.companyName,
+      isActive: true,
+    });
+    organization = await this.organizationRepository.save(organization);
+
+    const membership = this.memberRepository.create({
+      organizationId: organization.id,
+      userId: user.id,
+      role: OrganizationRole.OWNER,
+      isActive: true,
+    });
+    await this.memberRepository.save(membership);
+
+    const msmeProfile = this.profileRepository.create({
+      organizationId: organization.id,
+    });
+    await this.profileRepository.save(msmeProfile);
+
+    const response = this.generateAuthResponse(user);
+    response.organization = {
+      id: organization.id,
+      name: organization.name,
+    };
+
+    return response;
+  }
+
+  async loginLocal(dto: LoginLocalDto): Promise<AuthResponseDto> {
+    const normalizedEmail = dto.email.toLowerCase();
+
+    // We must explicitly select the password field because it is set to select: false in the entity
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+      select: ['id', 'email', 'password', 'firstName', 'lastName', 'avatarUrl', 'isActive'],
+    });
+
+    if (!user || !user.password) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('This account has been deactivated.');
+    }
+
+    user.lastLoginAt = new Date();
+    await this.userRepository.save(user);
+
+    // Fetch the user's primary organization
+    const membership = await this.memberRepository.findOne({
+      where: { userId: user.id, isActive: true },
+      relations: ['organization'],
+    });
+
+    if (!membership || !membership.organization) {
+      throw new ForbiddenException('User is not associated with any active organization.');
+    }
+
+    const response = this.generateAuthResponse(user);
+    response.organization = {
+      id: membership.organization.id,
+      name: membership.organization.name,
     };
 
     return response;

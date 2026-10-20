@@ -1,4 +1,4 @@
-﻿import { IsNotEmpty, IsString } from 'class-validator';
+﻿import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 export class GoogleLoginDto {
   @IsString()
@@ -30,4 +30,34 @@ export class AuthResponseDto {
   refreshToken!: string;
   user!: AuthUserDto;
   organization?: AuthOrganizationDto;
+}
+
+export class RegisterLocalDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(6)
+  password!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  firstName!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lastName!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  companyName!: string;
+}
+
+export class LoginLocalDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  password!: string;
 }

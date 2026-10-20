@@ -18,7 +18,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DataSource } from 'typeorm';
 
-import { TenderEntity } from '../../../libs/database/entities/tender/tender.entity';
+import { TenderEntity, TenderType } from '../../../libs/database/entities/tender/tender.entity';
 import { PipelineItemEntity } from '../../../libs/database/entities/pipeline/pipeline-item.entity';
 import { OrganizationEntity } from '../../../libs/database/entities/identity/organization.entity';
 import { TenderDocumentEntity } from '../../../libs/database/entities/tender/tender-document.entity';
@@ -76,7 +76,76 @@ export class EvaluationController {
     private readonly dataSource: DataSource,
     private readonly aiGatewayService: AiGatewayService
   ) {}
-  
+
+  private isUuid(value: string): boolean {
+    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  private async resolveTenderId(tenderId: string, orgId: string): Promise<string> {
+    if (!tenderId?.trim()) {
+      throw new BadRequestException('A tender identifier is required.');
+    }
+
+    const tenderRepo = this.dataSource.getRepository(TenderEntity);
+    let tender: TenderEntity | null = null;
+
+    if (this.isUuid(tenderId)) {
+      tender = await tenderRepo.findOne({ where: { id: tenderId } });
+    } else {
+      tender = await tenderRepo.findOne({
+        where: [
+          { referenceNumber: tenderId } as any,
+          { documentUrl: tenderId } as any,
+          { title: tenderId } as any,
+        ],
+      });
+    }
+
+    if (!tender || !tender.isActive) {
+      throw new NotFoundException('Tender not found.');
+    }
+
+    const isPublic =
+      tender.tenderType === TenderType.OPEN ||
+      tender.tenderType === TenderType.GLOBAL;
+    const isPrivate =
+      tender.tenderType === TenderType.LIMITED ||
+      tender.tenderType === TenderType.SINGLE;
+    const belongsToOrganization = tender.organizationId === orgId;
+
+    if (!isPublic && !(isPrivate && belongsToOrganization)) {
+      throw new NotFoundException('Tender not found.');
+    }
+
+    return tender.id;
+  }
+
+  private async resolveDocumentId(orgId: string, documentId?: string): Promise<string> {
+    if (!documentId?.trim()) {
+      throw new BadRequestException('documentId is required. Select or upload a processed tender document first.');
+    }
+
+    const docRepo = this.dataSource.getRepository(TenderDocumentEntity);
+
+    if (this.isUuid(documentId)) {
+      const document = await docRepo.findOne({
+        where: { id: documentId, organizationId: orgId },
+      });
+      if (document) return document.id;
+      throw new NotFoundException('Tender document not found for this organization.');
+    }
+
+    const document = await docRepo.findOne({
+      where: { fileName: documentId, organizationId: orgId } as any,
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Tender document '${documentId}' was not found for this organization.`);
+    }
+
+    return document.id;
+  }
+
   @Post('tenders/:tenderId/evaluate')
   async evaluateTender(
     @Param('orgId') orgId: string, 
@@ -84,17 +153,16 @@ export class EvaluationController {
     @Body() payload: EvaluatePayload,
     @CurrentUser() user: JwtPayload
   ) {
-    if (!payload.documentId) {
-      throw new UnprocessableEntityException('documentId is required for evaluation.');
-    }
+    const actualTenderId = await this.resolveTenderId(tenderId, orgId);
+    const resolvedDocId = await this.resolveDocumentId(orgId, payload?.documentId);
 
     const orgRepo = this.dataSource.getRepository(OrganizationEntity);
     const org = await orgRepo.findOne({ where: { id: orgId } });
     if (!org) throw new NotFoundException(`Organization with ID ${orgId} not found.`);
 
     const docRepo = this.dataSource.getRepository(TenderDocumentEntity);
-    const doc = await docRepo.findOne({ where: { id: payload.documentId, organizationId: orgId } });
-    if (!doc) throw new NotFoundException(`Tender document ${payload.documentId} not found for this organization.`);
+    const doc = await docRepo.findOne({ where: { id: resolvedDocId, organizationId: orgId } });
+    if (!doc) throw new NotFoundException(`Tender document not found for this organization.`);
 
     const profileRepo = this.dataSource.getRepository(MsmeProfileEntity);
     const msmeProfile = await profileRepo.findOne({ where: { organizationId: orgId } });
@@ -103,7 +171,6 @@ export class EvaluationController {
     const certs = await certRepo.find({ where: { organizationId: orgId } });
 
     let orgCapabilitiesText = payload.dynamicContext;
-    
     let turnover = 0;
     let experience = 0;
     let hasCertifications = false;
@@ -112,7 +179,6 @@ export class EvaluationController {
     if (!orgCapabilitiesText) {
       if (msmeProfile) {
         const profileData = msmeProfile as any;
-        
         hasCertifications = certs.length > 0;
         const certNames = hasCertifications 
           ? certs.map((c: any) => c.name || c.title || c.certificationName || 'Certified').join(', ') 
@@ -155,7 +221,6 @@ Organization Factual Profile:
       throw new InternalServerErrorException(`AI Engine Evaluation Failed: ${error.message}`);
     }
 
-    // Safely extract arrays handling both camelCase and snake_case[cite: 13]
     const ruleResults: RuleResult[] = evaluationResult?.ruleResults || evaluationResult?.rule_results || [];
     const evidenceCoverage: number = evaluationResult?.evidenceCoverage ?? evaluationResult?.evidence_coverage ?? 100.0;
     
@@ -245,13 +310,13 @@ Organization Factual Profile:
     try {
       const evalRepo = this.dataSource.getRepository(TenderEvaluationEntity);
       let evaluation = await evalRepo.findOne({ 
-        where: { organizationId: orgId, tenderId: tenderId, documentId: doc.id } 
+        where: { organizationId: orgId, tenderId: actualTenderId, documentId: doc.id } 
       });
 
       if (!evaluation) {
         evaluation = evalRepo.create({
           organizationId: orgId,
-          tenderId: tenderId,
+          tenderId: actualTenderId,
           documentId: doc.id,
         });
       }
@@ -274,7 +339,7 @@ Organization Factual Profile:
     }
 
     return {
-      tenderId,
+      tenderId: actualTenderId,
       organizationId: orgId,
       documentId: doc.id,
       matchScore: evaluationResult.matchScore || evaluationResult.match_score || 0,
@@ -295,21 +360,15 @@ Organization Factual Profile:
     @Param('tenderId') tenderId: string,
     @Query('documentId') documentId?: string
   ) {
+    const actualTenderId = await this.resolveTenderId(tenderId, orgId);
+    const resolvedDocId = await this.resolveDocumentId(orgId, documentId);
+
     try {
       const evalRepo = this.dataSource.getRepository(TenderEvaluationEntity);
       
-      const whereClause: { organizationId: string; tenderId: string; documentId?: string } = { 
-        organizationId: orgId, 
-        tenderId: tenderId 
-      };
-      
-      if (documentId) {
-        whereClause.documentId = documentId;
-      }
-
       const evaluation = await evalRepo.findOne({
-        where: whereClause,
-        order: { updatedAt: 'DESC' }
+        where: { organizationId: orgId, tenderId: actualTenderId, documentId: resolvedDocId },
+        order: { updatedAt: 'DESC' } as any
       });
 
       if (!evaluation) {
@@ -349,12 +408,15 @@ Organization Factual Profile:
     @Param('tenderId') tenderId: string,
     @Body() payload: GenerateDraftPayload
   ) {
-    if (!payload.documentId || !payload.draftType) {
-      throw new BadRequestException('documentId and draftType are required.');
+    const actualTenderId = await this.resolveTenderId(tenderId, orgId);
+    const resolvedDocId = await this.resolveDocumentId(orgId, payload.documentId);
+
+    if (!payload.draftType) {
+      throw new BadRequestException('draftType is required.');
     }
 
     const docRepo = this.dataSource.getRepository(TenderDocumentEntity);
-    const doc = await docRepo.findOne({ where: { id: payload.documentId, organizationId: orgId } });
+    const doc = await docRepo.findOne({ where: { id: resolvedDocId, organizationId: orgId } });
     if (!doc) throw new NotFoundException('Document not found or access denied.');
 
     const profileRepo = this.dataSource.getRepository(MsmeProfileEntity);
@@ -375,7 +437,7 @@ Organization Factual Profile:
     let evalSummary = 'No AI evaluation available.';
     try {
       const evalRepo = this.dataSource.getRepository(TenderEvaluationEntity);
-      const evaluation = await evalRepo.findOne({ where: { organizationId: orgId, tenderId, documentId: doc.id } });
+      const evaluation = await evalRepo.findOne({ where: { organizationId: orgId, tenderId: actualTenderId, documentId: doc.id } });
       if (evaluation) evalSummary = evaluation.summary;
     } catch (e) {
       console.warn("Skipped DB evaluation fetch due to metadata error.");
@@ -402,13 +464,13 @@ Organization Factual Profile:
 
       const draftRepo = this.dataSource.getRepository(TenderDraftEntity);
       let draftRecord = await draftRepo.findOne({
-        where: { organizationId: orgId, tenderId, documentId: doc.id, draftType: payload.draftType }
+        where: { organizationId: orgId, tenderId: actualTenderId, documentId: doc.id, draftType: payload.draftType }
       });
 
       if (!draftRecord) {
         draftRecord = draftRepo.create({
           organizationId: orgId,
-          tenderId,
+          tenderId: actualTenderId,
           documentId: doc.id,
           draftType: payload.draftType
         });
@@ -434,12 +496,13 @@ Organization Factual Profile:
     @Param('tenderId') tenderId: string,
     @Query('documentId') documentId: string
   ) {
-    if (!documentId) throw new BadRequestException('documentId query parameter is required.');
-    
+    const actualTenderId = await this.resolveTenderId(tenderId, orgId);
+    const resolvedDocId = await this.resolveDocumentId(orgId, documentId);
+
     const draftRepo = this.dataSource.getRepository(TenderDraftEntity);
     return await draftRepo.find({
-      where: { organizationId: orgId, tenderId, documentId },
-      order: { updatedAt: 'DESC' }
+      where: { organizationId: orgId, tenderId: actualTenderId, documentId: resolvedDocId },
+      order: { updatedAt: 'DESC' } as any
     });
   }
 
@@ -573,21 +636,29 @@ Organization Factual Profile:
     }
   }
 
-  @Post('pipeline/:tenderId')
+  // FIXED: Supports pipeline saving whether tenderId is passed via URL param OR JSON body
+  @Post(['pipeline/:tenderId', 'pipeline'])
   async saveToPipeline(
     @Param('orgId') orgId: string,
-    @Param('tenderId') tenderId: string,
+    @Param('tenderId') paramTenderId?: string,
+    @Body() body?: { tenderId?: string }
   ) {
+    const rawTenderId = paramTenderId || body?.tenderId;
+    if (!rawTenderId) {
+      throw new BadRequestException('tenderId is required to save to pipeline.');
+    }
+
+    const actualTenderId = await this.resolveTenderId(rawTenderId, orgId);
     const pipelineRepo = this.dataSource.getRepository(PipelineItemEntity);
     
-    let existing = await pipelineRepo.findOne({ where: { tenderId, organizationId: orgId } });
+    let existing = await pipelineRepo.findOne({ where: { tenderId: actualTenderId, organizationId: orgId } });
     if (existing) {
       return existing; 
     }
 
     const newItem = pipelineRepo.create({
       organizationId: orgId,
-      tenderId: tenderId,
+      tenderId: actualTenderId,
       status: 'Drafting',
     } as Partial<PipelineItemEntity>);
 

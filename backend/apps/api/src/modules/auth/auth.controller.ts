@@ -17,6 +17,8 @@ import {
   AuthResponseDto,
   GoogleLoginDto,
   RefreshTokenDto,
+  RegisterLocalDto,
+  LoginLocalDto,
 } from './dto/auth.dto';
 
 @ApiTags('Authentication')
@@ -55,6 +57,22 @@ export class AuthController {
     return this.authService.loginLocalDemo();
   }
 
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new user and organization' })
+  @ApiBody({ type: RegisterLocalDto })
+  async registerLocal(@Body() dto: RegisterLocalDto): Promise<AuthResponseDto> {
+    return this.authService.registerLocal(dto);
+  }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Authenticate user using email and password' })
+  @ApiBody({ type: LoginLocalDto })
+  async loginLocal(@Body() dto: LoginLocalDto): Promise<AuthResponseDto> {
+    return this.authService.loginLocal(dto);
+  }
+
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -72,4 +90,4 @@ export class AuthController {
   ): Promise<AuthResponseDto> {
     return this.authService.refreshTokens(refreshTokenDto.refreshToken);
   }
-}
+} 

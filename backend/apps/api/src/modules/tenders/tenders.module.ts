@@ -1,3 +1,4 @@
+
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -8,6 +9,7 @@ import { TenderSourceEntity } from '@app/database/entities/tender/tender-source.
 import { TenderCategoryLinkEntity } from '@app/database/entities/tender/tender-category-link.entity';
 import { TenderFieldCorrectionEntity } from '@app/database/entities/tender/tender-field-correction.entity';
 
+import { AiModule } from '../ai/ai.module';
 import { CategoriesController } from './categories.controller';
 import { TendersController } from './tenders.controller';
 import { DocumentsController } from './documents.controller';
@@ -24,6 +26,7 @@ import { FieldCorrectionsService } from './field-corrections.service';
 
 @Module({
   imports: [
+    AiModule,
     TypeOrmModule.forFeature([
       TenderEntity,
       TenderCategoryEntity,

@@ -13,7 +13,6 @@ import {
   Lock,
   Mail
 } from "lucide-react";
-import { loginLocalDemo } from "../api";
 import { TenderIQLogo } from "../components/common/TenderIQLogo";
 
 interface LoginProps {
@@ -31,9 +30,9 @@ export default function Login({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-fill for the backend's local demo account
-  const [email, setEmail] = useState("demo@tenderiq.local");
-  const [password, setPassword] = useState("demo_password");
+  // Real authentication state (no more hardcoded demo credentials)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -49,20 +48,32 @@ export default function Login({
 
     try {
       // Hit the actual NestJS backend auth controller
-      const authData = await loginLocalDemo();
+      const response = await fetch('http://localhost:4000/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid credentials or network error.");
+      }
       
       // Persist the JWT and Organization ID for future API calls
-      localStorage.setItem('accessToken', authData.accessToken);
-      localStorage.setItem('refreshToken', authData.refreshToken);
-      if (authData.organization?.id) {
-        localStorage.setItem('activeOrganizationId', authData.organization.id);
+      localStorage.setItem('accessToken', data.accessToken);
+      if (data.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken);
+      }
+      if (data.organization?.id) {
+        localStorage.setItem('activeOrganizationId', data.organization.id);
       }
       
       // Navigate to dashboard
       onLogin();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Failed to connect to authentication server. Please ensure the NestJS backend on port 4000 is active.");
+      setError(err.message || "Failed to connect to authentication server.");
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +177,7 @@ export default function Login({
                   </div>
                 </div>
 
-                {/* Remember & Local Demo Indicator */}
+                {/* Remember Checkbox */}
                 <div className="flex items-center justify-between text-xs pt-1">
                   <label htmlFor="remember" className="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-300">
                     <input 
@@ -177,9 +188,6 @@ export default function Login({
                     />
                     <span>Remember this device</span>
                   </label>
-                  <span className="font-mono text-[11px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-                    Local Demo Mode
-                  </span>
                 </div>
 
                 {/* Submit Button */}

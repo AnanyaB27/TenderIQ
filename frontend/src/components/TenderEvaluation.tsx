@@ -39,13 +39,16 @@ interface TenderEvaluationProps {
 
 export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({ 
   organizationId, 
-  tenderId, 
+  tenderId: rawTenderId, 
   documentId: propDocumentId,
   tenderTitle = 'Unknown Tender',
   onBack
 }) => {
+  // Ensure we don't pass filenames or titles as IDs into Postgres UUID endpoints
+  const tenderId = (rawTenderId && !rawTenderId.includes('.')) ? rawTenderId : sessionStorage.getItem('dashboard_selectedTenderId') || rawTenderId;
+
   // Fallback to sessionStorage if documentId prop wasn't passed down directly
-  const documentId = propDocumentId || sessionStorage.getItem('dashboard_documentId') || undefined;
+  const documentId = propDocumentId || sessionStorage.getItem('dashboard_documentId') || tenderId;
 
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -66,20 +69,17 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
         const data = await getTenderEvaluation(organizationId, tenderId, documentId);
         setEvaluation(data);
       } catch (err) {
-        // If evaluation doesn't exist yet, it's safe to let the user click "Run Evaluation"
         setEvaluation(null);
       } finally {
         setLoading(false);
       }
     }
-    fetchEvaluation();
+    if (tenderId) {
+      fetchEvaluation();
+    }
   }, [organizationId, tenderId, documentId]);
 
   const handleRunEvaluation = async () => {
-    if (!documentId) {
-      setError('Cannot evaluate: No document attached. Please return to the tender detail inspector and upload a tender PDF first.');
-      return;
-    }
     setEvaluating(true);
     setError(null);
     try {
@@ -93,7 +93,6 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
   };
 
   const handleGenerateDraft = async () => {
-    if (!documentId) return;
     setIsDrafting(true);
     try {
       const result = await generateBidDraft(organizationId, tenderId, documentId, draftType);
@@ -147,7 +146,7 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
             Evaluation Readiness Required
           </h2>
           <p className="text-slate-400 text-xs sm:text-sm max-w-md mx-auto mt-2 leading-relaxed">
-            This tender has not yet been processed through the deterministic AI RuleEngine, or stored results are pending evaluation.
+            This tender is ready for rule verification. Click below to execute the deterministic AI RuleEngine against your MSME profile.
           </p>
         </div>
 
@@ -190,7 +189,7 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
               Deterministic Audit
             </span>
             <span className="text-xs text-slate-500">•</span>
-            <span className="text-xs font-mono text-slate-400">Tender ID: {tenderId}</span>
+            <span className="text-xs font-mono text-slate-400">Target ID: {tenderId.slice(0, 8)}...</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
             Tender Compliance & Gap Audit
@@ -316,7 +315,6 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
             </p>
           </div>
 
-          {/* Draft Section Selector & Trigger */}
           <div className="flex flex-wrap items-center gap-2.5">
             <select 
               value={draftType}
@@ -330,7 +328,7 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
 
             <button 
               onClick={handleGenerateDraft}
-              disabled={isDrafting || !documentId}
+              disabled={isDrafting}
               className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 transition shadow-md shadow-cyan-500/20 disabled:opacity-50"
             >
               {isDrafting ? (
@@ -348,7 +346,6 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
           </div>
         </div>
 
-        {/* Generated Draft Display */}
         {draft && (
           <div className="enterprise-card border-slate-800/90 overflow-hidden shadow-2xl">
             <div className="bg-surface-850 px-5 py-3.5 border-b border-slate-800 flex justify-between items-center">
@@ -359,7 +356,6 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
                 </span>
               </div>
 
-              {/* Copy Button */}
               <button
                 onClick={handleCopyDraft}
                 className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white bg-surface-900 border border-slate-700 hover:border-slate-600 px-3 py-1.5 rounded-lg transition"
@@ -378,14 +374,12 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
               </button>
             </div>
             
-            {/* Markdown Body */}
             <div className="p-6 bg-surface-950/60 prose-dark">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {draft.content}
               </ReactMarkdown>
             </div>
 
-            {/* Warnings and Missing Info */}
             {(draft.warnings?.length > 0 || draft.missingInformation?.length > 0) && (
               <div className="bg-surface-900/90 px-6 py-4 border-t border-slate-800 space-y-4">
                 {draft.warnings?.length > 0 && (
@@ -422,8 +416,6 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
 
 const EnterpriseRuleCard: React.FC<{ rule: RuleResult }> = ({ rule }) => {
   const [expanded, setExpanded] = useState(false);
-  const isPass = rule.status === 'PASS';
-  const isFail = rule.status === 'FAIL';
 
   return (
     <div className={`enterprise-card border transition-all duration-200 overflow-hidden ${

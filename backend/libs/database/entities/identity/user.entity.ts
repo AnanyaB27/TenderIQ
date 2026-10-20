@@ -18,6 +18,9 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 255, unique: true })
   email!: string;
 
+  @Column({ type: 'varchar', nullable: true, select: false })
+  password!: string | null;
+
   @Column({ type: 'varchar', length: 100 })
   firstName!: string;
 
@@ -38,9 +41,6 @@ export class UserEntity {
 
   @OneToMany(() => UserOauthIdentityEntity, (oauthIdentity) => oauthIdentity.user)
   oauthIdentities!: UserOauthIdentityEntity[];
-
-  //@OneToMany(() => NotificationPreferenceEntity, (preference) => preference.user)
-  //notificationPreferences!: NotificationPreferenceEntity[];
 
   @CreateDateColumn({ type: 'timestamp with time zone', name: 'created_at' })
   createdAt!: Date;

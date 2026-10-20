@@ -16,17 +16,33 @@ class DocumentPipelineService:
 
     async def process_document(self, document_id: str, file_bytes: bytes) -> dict:
         try:
-            # 1. Parsing
+            # 1. Parsing - Attempt standard text extraction first
             reader = PdfReader(io.BytesIO(file_bytes))
             page_count = len(reader.pages)
             raw_pages = []
+            total_extracted_chars = 0
             
             for i, page in enumerate(reader.pages):
                 page_text = page.extract_text() or ""
+                clean_text = page_text.strip()
+                total_extracted_chars += len(clean_text)
+                
                 raw_pages.append({
                     "page_num": i + 1,
-                    "text": page_text.strip(),
+                    "text": clean_text,
                 })
+
+            # FALLBACK: If standard extraction yielded almost nothing, it's likely a scanned PDF.
+            if total_extracted_chars < 50:
+                logger.info(f"Document {document_id} lacks selectable text. Initiating OCR fallback...")
+                from app.parsing.ocr_pipeline import OcrPipeline
+                ocr_engine = OcrPipeline()
+                raw_pages = ocr_engine.extract_text_from_pdf_bytes(file_bytes)
+                
+                # Verify if OCR actually found anything
+                total_ocr_chars = sum(len(p["text"]) for p in raw_pages)
+                if total_ocr_chars < 50:
+                    return {"status": "NO_EXTRACTABLE_TEXT", "extracted_text": "", "page_count": page_count}
 
             # 2. Chunking
             chunks = []

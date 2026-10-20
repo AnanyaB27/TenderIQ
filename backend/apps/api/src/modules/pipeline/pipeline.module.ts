@@ -1,9 +1,11 @@
+
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { PipelineItemEntity } from '@app/database/entities/pipeline/pipeline-item.entity';
 import { ChecklistTaskEntity } from '@app/database/entities/pipeline/checklist-task.entity';
 import { BidDraftEntity } from '@app/database/entities/pipeline/bid-draft.entity';
+import { TenderEntity } from '@app/database/entities/tender/tender.entity';
 
 import { PipelineItemsController } from './pipeline-items.controller';
 import { ChecklistTasksController } from './checklist-tasks.controller';
@@ -19,6 +21,7 @@ import { BidDraftsService } from './bid-drafts.service';
       PipelineItemEntity,
       ChecklistTaskEntity,
       BidDraftEntity,
+      TenderEntity,
     ]),
   ],
   controllers: [

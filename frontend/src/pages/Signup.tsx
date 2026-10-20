@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Eye, EyeOff, ShieldCheck, ArrowRight, User, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, ArrowRight, User, Mail, Lock, Building2, Loader2 } from "lucide-react";
 import { TenderIQLogo } from "../components/common/TenderIQLogo";
 
 interface SignupProps {
@@ -12,31 +12,68 @@ export default function Signup({ onLogin }: SignupProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
     if (password !== confirmPassword) {
       setValidationError("Passwords do not match. Please verify.");
       return;
     }
+    
     setValidationError(null);
-    // In current flow, proceed to login
-    onLogin();
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:4000/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          firstName,
+          lastName,
+          companyName
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Registration failed. Please try again.");
+      }
+
+      // Securely store the issued JWTs and Organization Context
+      localStorage.setItem('accessToken', data.accessToken);
+      if (data.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken);
+      }
+      if (data.organization?.id) {
+        localStorage.setItem('activeOrganizationId', data.organization.id);
+      }
+
+      // Trigger the parent authentication state to render the Dashboard
+      onLogin();
+    } catch (err: any) {
+      setValidationError(err.message || "A network error occurred. Is the backend running?");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-surface-950 text-slate-100 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-lg">
         
-        {/* Logo */}
         <div className="flex justify-center mb-6">
           <TenderIQLogo size="md" />
         </div>
 
-        {/* Signup Card */}
         <div className="enterprise-card p-6 sm:p-8 border-slate-800/90 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
 
@@ -61,13 +98,9 @@ export default function Signup({ onLogin }: SignupProps) {
           )}
 
           <form className="space-y-4" onSubmit={handleSubmit}>
-            {/* First & Last Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
-                <label
-                  htmlFor="firstName"
-                  className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5"
-                >
+                <label htmlFor="firstName" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
                   First Name
                 </label>
                 <div className="relative">
@@ -80,17 +113,14 @@ export default function Signup({ onLogin }: SignupProps) {
                     required
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Ananya"
+                    placeholder="First Name"
                     className="w-full bg-surface-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner"
                   />
                 </div>
               </div>
 
               <div>
-                <label
-                  htmlFor="lastName"
-                  className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5"
-                >
+                <label htmlFor="lastName" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
                   Last Name
                 </label>
                 <div className="relative">
@@ -100,21 +130,38 @@ export default function Signup({ onLogin }: SignupProps) {
                   <input
                     id="lastName"
                     type="text"
+                    required
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Bhatt"
+                    placeholder="Last Name"
                     className="w-full bg-surface-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Email */}
             <div>
-              <label
-                htmlFor="email"
-                className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5"
-              >
+              <label htmlFor="companyName" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Company / Organization Name
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <input
+                  id="companyName"
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="TechCorp India Pvt Ltd"
+                  className="w-full bg-surface-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition shadow-inner"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
                 Work Email
               </label>
               <div className="relative">
@@ -133,12 +180,8 @@ export default function Signup({ onLogin }: SignupProps) {
               </div>
             </div>
 
-            {/* Password */}
             <div>
-              <label
-                htmlFor="password"
-                className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5"
-              >
+              <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
                 Password
               </label>
               <div className="relative">
@@ -165,12 +208,8 @@ export default function Signup({ onLogin }: SignupProps) {
               </div>
             </div>
 
-            {/* Confirm Password */}
             <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5"
-              >
+              <label htmlFor="confirmPassword" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
                 Confirm Password
               </label>
               <div className="relative">
@@ -197,17 +236,25 @@ export default function Signup({ onLogin }: SignupProps) {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
-              className="w-full mt-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl text-xs sm:text-sm transition duration-200 shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 group"
+              disabled={isLoading}
+              className="w-full mt-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl text-xs sm:text-sm transition duration-200 shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <span>Register Organization</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Registering...</span>
+                </>
+              ) : (
+                <>
+                  <span>Register Organization</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </>
+              )}
             </button>
           </form>
 
-          {/* Login Link */}
           <div className="mt-5 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-400">
             Already registered?{" "}
             <button
