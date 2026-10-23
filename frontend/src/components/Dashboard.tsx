@@ -56,7 +56,13 @@ export default function Dashboard() {
 
   const [selectedTenderObj, setSelectedTenderObj] = useState<Tender | null>(() => {
     const saved = sessionStorage.getItem('dashboard_selectedTenderObj');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      return parsed?.id && parsed.documentId === parsed.id ? null : parsed;
+    } catch {
+      return null;
+    }
   });
 
   const [uploadedFile, setUploadedFile] = useState<string | null>(() => {
@@ -65,6 +71,10 @@ export default function Dashboard() {
 
   const [documentId, setDocumentId] = useState<string | undefined>(() => {
     return sessionStorage.getItem('dashboard_documentId') || undefined;
+  });
+
+  const [documentTenderId, setDocumentTenderId] = useState<string | undefined>(() => {
+    return sessionStorage.getItem('dashboard_documentTenderId') || undefined;
   });
 
   const [documentSummary, setDocumentSummary] = useState<string | null>(() => {
@@ -110,6 +120,11 @@ export default function Dashboard() {
     if (documentId) sessionStorage.setItem('dashboard_documentId', documentId);
     else sessionStorage.removeItem('dashboard_documentId');
   }, [documentId]);
+
+  useEffect(() => {
+    if (documentTenderId) sessionStorage.setItem('dashboard_documentTenderId', documentTenderId);
+    else sessionStorage.removeItem('dashboard_documentTenderId');
+  }, [documentTenderId]);
 
   useEffect(() => {
     if (uploadedFile) sessionStorage.setItem('dashboard_uploadedFile', uploadedFile);
@@ -247,6 +262,10 @@ export default function Dashboard() {
         throw new Error('The server created the tender but did not return a document ID. The backend upload response must include documentId (or document.id) so the evaluation endpoint can use it.');
       }
 
+      if (returnedDocumentId === returnedTenderId) {
+        throw new Error('The upload API returned the tender ID as the document ID. A separate TenderDocument ID is required.');
+      }
+
       const uploadedTender: any = {
         ...tender,
         id: returnedTenderId,
@@ -258,6 +277,7 @@ export default function Dashboard() {
       };
 
       setDocumentId(returnedDocumentId);
+      setDocumentTenderId(returnedTenderId);
       setUploadedFile(customUploadFile.name);
       setDocumentSummary(payload.documentSummary ?? document.summary ?? payload.summary ?? null);
       setDocumentMetadata(payload.metadata ?? document.metadata ?? null);
@@ -293,7 +313,12 @@ export default function Dashboard() {
       
       if (result && result.status === 'READY') {
         setUploadedFile(result.filename);
+        if (!inspectingTender || !result.id || result.id === inspectingTender.id) {
+          throw new Error('Unable to associate the uploaded document with this tender.');
+        }
         setDocumentId(result.id);
+        setDocumentTenderId(inspectingTender.id);
+        setInspectingTender(current => current ? ({ ...current, documentId: result.id } as Tender) : current);
         setDocumentSummary(result.documentSummary || null);
         setDocumentMetadata(result.metadata || null);
       } else {
@@ -307,7 +332,20 @@ export default function Dashboard() {
   };
 
   const handleEvaluateClick = (tender: any) => {
-    setSelectedTenderObj(tender);
+    const tenderId = tender?.id;
+    const tenderDocumentId = tender?.documentId && tender.documentId !== tenderId
+      ? tender.documentId
+      : documentTenderId === tenderId && documentId !== tenderId ? documentId : undefined;
+
+    if (!tenderId || !tenderDocumentId) {
+      alert('A valid document ID is not linked to this tender. Please upload its PDF before evaluation.');
+      return;
+    }
+
+    setDocumentId(tenderDocumentId);
+    setDocumentTenderId(tenderId);
+    sessionStorage.setItem('dashboard_selectedTenderId', tenderId);
+    setSelectedTenderObj({ ...tender, documentId: tenderDocumentId });
   };
 
   const handleSaveToPipeline = async () => {
@@ -384,11 +422,21 @@ export default function Dashboard() {
     setInspectingTender(null);
     setUploadedFile(null);
     setDocumentId(undefined);
+    setDocumentTenderId(undefined);
     setDocumentSummary(null);
     setDocumentMetadata(null);
   };
 
   if (selectedTenderObj) {
+    const selectedDocumentId = (selectedTenderObj as any).documentId;
+    if (!selectedDocumentId || selectedDocumentId === selectedTenderObj.id) {
+      return (
+        <div className="space-y-4">
+          <button onClick={() => setSelectedTenderObj(null)} className="text-cyan-400 text-sm">Back to Tender Details</button>
+          <p className="text-amber-400 text-sm">The document ID for this tender is missing or invalid. Upload its PDF before evaluating.</p>
+        </div>
+      );
+    }
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
@@ -419,7 +467,7 @@ export default function Dashboard() {
         <TenderEvaluation 
           organizationId={authOrgId} 
           tenderId={selectedTenderObj.id} 
-          documentId={documentId || (selectedTenderObj as any).documentId} 
+          documentId={selectedDocumentId} 
           tenderTitle={selectedTenderObj.title || (selectedTenderObj as any).tenderTitle}
           onBack={() => setSelectedTenderObj(null)}
         />
@@ -428,7 +476,10 @@ export default function Dashboard() {
   }
 
   if (inspectingTender) {
-    const hasDocument = !!documentId || !!(inspectingTender as any).documentUrl || inspectingTender.referenceNumber?.startsWith('CUSTOM-');
+    const hasDocument = Boolean(
+      ((inspectingTender as any).documentId && (inspectingTender as any).documentId !== inspectingTender.id) ||
+      (documentTenderId === inspectingTender.id && documentId && documentId !== inspectingTender.id)
+    );
 
     return (
       <div className="max-w-5xl mx-auto space-y-6">

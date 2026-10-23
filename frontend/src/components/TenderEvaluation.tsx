@@ -44,11 +44,22 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
   tenderTitle = 'Unknown Tender',
   onBack
 }) => {
-  // Ensure we don't pass filenames or titles as IDs into Postgres UUID endpoints
-  const tenderId = (rawTenderId && !rawTenderId.includes('.')) ? rawTenderId : sessionStorage.getItem('dashboard_selectedTenderId') || rawTenderId;
+  // Keep the tender ID and document ID separate. Never fall back to tenderId:
+  // the evaluation API requires the ID of the TenderDocument record.
+  const tenderId = rawTenderId;
+  const storedSelectedTenderId = sessionStorage.getItem('dashboard_selectedTenderId');
+  const storedDocumentId = sessionStorage.getItem('dashboard_documentId');
+  const storedDocumentTenderId = sessionStorage.getItem('dashboard_documentTenderId');
 
-  // Fallback to sessionStorage if documentId prop wasn't passed down directly
-  const documentId = propDocumentId || sessionStorage.getItem('dashboard_documentId') || tenderId;
+  const documentId =
+    propDocumentId && propDocumentId !== tenderId
+      ? propDocumentId
+      : storedSelectedTenderId === tenderId &&
+          storedDocumentTenderId === tenderId &&
+          storedDocumentId &&
+          storedDocumentId !== tenderId
+        ? storedDocumentId
+        : undefined;
 
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -65,6 +76,14 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
     async function fetchEvaluation() {
       setLoading(true);
       setError(null);
+
+      if (!organizationId || !tenderId || !documentId || documentId === tenderId) {
+        setEvaluation(null);
+        setError('This tender has no valid linked document ID. Return to the dashboard, upload the tender PDF again, and retry.');
+        setLoading(false);
+        return;
+      }
+
       try {
         const data = await getTenderEvaluation(organizationId, tenderId, documentId);
         setEvaluation(data);
@@ -74,12 +93,15 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
         setLoading(false);
       }
     }
-    if (tenderId) {
-      fetchEvaluation();
-    }
+    fetchEvaluation();
   }, [organizationId, tenderId, documentId]);
 
   const handleRunEvaluation = async () => {
+    if (!documentId || documentId === tenderId) {
+      setError('Cannot evaluate: the separate TenderDocument ID is missing or invalid. Return to the dashboard and upload the PDF again.');
+      return;
+    }
+
     setEvaluating(true);
     setError(null);
     try {
@@ -93,6 +115,11 @@ export const TenderEvaluation: React.FC<TenderEvaluationProps> = ({
   };
 
   const handleGenerateDraft = async () => {
+    if (!documentId || documentId === tenderId) {
+      setError('Cannot generate a draft because the separate TenderDocument ID is missing or invalid. Upload the PDF again first.');
+      return;
+    }
+
     setIsDrafting(true);
     try {
       const result = await generateBidDraft(organizationId, tenderId, documentId, draftType);
