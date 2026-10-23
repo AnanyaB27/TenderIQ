@@ -301,15 +301,10 @@ export default function Login({
                 </div>
 
                 {/* Bottom Trust Indicators */}
-                <div className="flex items-center justify-between pt-2 text-xs text-slate-400 border-t border-slate-800/80">
-                  <span className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                    <span>Zero Hallucination Bid Drafter</span>
-                  </span>
-                  <span className="text-slate-500 font-mono">
-                    Presidency University CSE Project
-                  </span>
-                </div>
+                <div className="flex items-center gap-1.5 pt-2 text-xs text-slate-400 border-t border-slate-800/80">
+  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+  <span>Evidence-Based Bid Intelligence</span>
+</div>
 
               </div>
             </div>
